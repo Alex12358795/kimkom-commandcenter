@@ -15,7 +15,7 @@ services:
     environment:
       DB_HOST: odoo-postgres
       DB_PORT: 5432
-      DB_USER: odoo
+      DB_USER: odoo_supertcg
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: odooSuperTCG
     labels:
@@ -23,8 +23,12 @@ services:
       - traefik.http.routers.supertcg.rule=Host(`supertcg.kimkom.net`)
       - traefik.http.routers.supertcg.entrypoints=http
       - traefik.http.routers.supertcg.service=supertcg
-      - "traefik.http.routers.supertcg.middlewares=login-rate-limit@file"
       - traefik.http.services.supertcg.loadbalancer.server.port=8069
+      - "traefik.http.routers.supertcg-login.rule=Host(`supertcg.kimkom.net`) && (PathPrefix(`/web/login`) || PathPrefix(`/web/session/authenticate`))"
+      - traefik.http.routers.supertcg-login.entrypoints=http
+      - traefik.http.routers.supertcg-login.priority=200
+      - traefik.http.routers.supertcg-login.service=supertcg
+      - "traefik.http.routers.supertcg-login.middlewares=login-rate-limit@file"
       - "traefik.http.routers.supertcg-websocket.rule=Host(`supertcg.kimkom.net`) && PathPrefix(`/websocket`)"
       - traefik.http.routers.supertcg-websocket.entrypoints=http
       - traefik.http.routers.supertcg-websocket.priority=100

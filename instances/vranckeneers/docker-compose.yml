@@ -15,7 +15,7 @@ services:
     environment:
       DB_HOST: odoo-postgres
       DB_PORT: 5432
-      DB_USER: odoo
+      DB_USER: odoo_vranckeneers
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: odoovranckeneers
     labels:
@@ -23,8 +23,12 @@ services:
       - traefik.http.routers.vranckeneers.rule=Host(`vranckeneers.kimkom.net`)
       - traefik.http.routers.vranckeneers.entrypoints=http
       - traefik.http.routers.vranckeneers.service=vranckeneers
-      - "traefik.http.routers.vranckeneers.middlewares=login-rate-limit@file"
       - traefik.http.services.vranckeneers.loadbalancer.server.port=8069
+      - "traefik.http.routers.vranckeneers-login.rule=Host(`vranckeneers.kimkom.net`) && (PathPrefix(`/web/login`) || PathPrefix(`/web/session/authenticate`))"
+      - traefik.http.routers.vranckeneers-login.entrypoints=http
+      - traefik.http.routers.vranckeneers-login.priority=200
+      - traefik.http.routers.vranckeneers-login.service=vranckeneers
+      - "traefik.http.routers.vranckeneers-login.middlewares=login-rate-limit@file"
       - "traefik.http.routers.vranckeneers-websocket.rule=Host(`vranckeneers.kimkom.net`) && PathPrefix(`/websocket`)"
       - traefik.http.routers.vranckeneers-websocket.entrypoints=http
       - traefik.http.routers.vranckeneers-websocket.priority=100

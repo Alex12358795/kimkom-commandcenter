@@ -16,8 +16,8 @@ route:
 receivers:
   - name: "telegram"
     telegram_configs:
-      - bot_token: "8428765616:AAG9AxqNmi5fgJ88-qJNUdCTdRlX6IcOHFc"
-        chat_id: 1115895934
+      - bot_token: "__TELEGRAM_BOT_TOKEN__"
+        chat_id: 0
         send_resolved: true
         api_url: "https://api.telegram.org"
         message: '{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}'

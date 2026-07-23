@@ -14,6 +14,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     python_slugify \
     ebaysdk \
     google-auth \
-    packaging
+    packaging \
+    sentry-sdk>=2.0.0
 
 USER odoo

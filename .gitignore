@@ -22,6 +22,7 @@ instances/*/.env
 instances/*/addons/**/google-service-account.json
 glitchtip/dsns.json
 glitchtip/.env
+monitoring/alertmanager/alertmanager.yml
 
 # Embedded git repos
 instances/*/addons/*/.git/
@@ -33,3 +34,7 @@ __pycache__/
 
 # Beszel (removed)
 monitoring/beszel/
+
+# Backup data (generated)
+backup-repo/
+backup-staging/

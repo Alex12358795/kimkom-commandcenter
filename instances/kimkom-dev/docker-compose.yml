@@ -33,8 +33,12 @@ services:
       - traefik.http.routers.kimkom-dev.rule=Host(`kimkom-dev.kimkom.net`)
       - traefik.http.routers.kimkom-dev.entrypoints=http
       - traefik.http.routers.kimkom-dev.service=kimkom-dev
-      - "traefik.http.routers.kimkom-dev.middlewares=login-rate-limit@file"
       - traefik.http.services.kimkom-dev.loadbalancer.server.port=8069
+      - "traefik.http.routers.kimkom-dev-login.rule=Host(`kimkom-dev.kimkom.net`) && (PathPrefix(`/web/login`) || PathPrefix(`/web/session/authenticate`))"
+      - traefik.http.routers.kimkom-dev-login.entrypoints=http
+      - traefik.http.routers.kimkom-dev-login.priority=200
+      - traefik.http.routers.kimkom-dev-login.service=kimkom-dev
+      - "traefik.http.routers.kimkom-dev-login.middlewares=login-rate-limit@file"
       - "traefik.http.routers.kimkom-dev-websocket.rule=Host(`kimkom-dev.kimkom.net`) && PathPrefix(`/websocket`)"
       - traefik.http.routers.kimkom-dev-websocket.entrypoints=http
       - traefik.http.routers.kimkom-dev-websocket.priority=100

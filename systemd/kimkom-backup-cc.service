@@ -1,0 +1,15 @@
+[Unit]
+Description=KimKom CommandCenter Backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/kimkom-commandcenter
+ExecStart=/opt/kimkom-commandcenter/scripts/backup-commandcenter.sh
+RestrictRealtime=true
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

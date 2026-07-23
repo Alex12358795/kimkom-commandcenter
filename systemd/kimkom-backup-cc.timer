@@ -1,0 +1,11 @@
+[Unit]
+Description=KimKom CommandCenter Daily Backup Timer
+Requires=kimkom-backup-cc.service
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

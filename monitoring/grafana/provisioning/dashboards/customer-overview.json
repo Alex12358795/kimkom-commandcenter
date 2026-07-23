@@ -1,0 +1,231 @@
+{
+  "uid": "kimkom-customer-overview",
+  "title": "KimKom – Customer Overview",
+  "tags": ["kimkom", "customers"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Public Uptime",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "avg by (instance) (probe_success{job=\"blackbox-https\"})",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0, "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 0.9 },
+              { "color": "green", "value": 0.99 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value" }
+    },
+    {
+      "id": 2,
+      "title": "Response Time (ms)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "avg by (instance) (probe_duration_seconds{job=\"blackbox-https\"}) * 1000",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Database Connections",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 8, "h": 5 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "pg_stat_database_numbackends{datname!~\"template.*|postgres\"}",
+          "legendFormat": "{{instance}}/{{datname}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Active Alerts",
+      "type": "table",
+      "gridPos": { "x": 8, "y": 4, "w": 16, "h": 5 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "format": "table",
+          "instant": true
+        }
+      ],
+      "transformations": [
+        { "id": "filterFieldsByName", "options": { "include": { "names": ["alertname","severity","instance","job","summary"] } } }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Backup Status",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 9, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "backup_v2_success_total",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 0 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "value", "textMode": "value" }
+    },
+    {
+      "id": 6,
+      "title": "Last Backup Age",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 9, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "time() - backup_v2_last_success_timestamp_seconds",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "red", "value": 86400 },
+              { "color": "yellow", "value": 72000 },
+              { "color": "green", "value": 36000 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "textMode": "value" }
+    },
+    {
+      "id": 7,
+      "title": "Disk Usage",
+      "type": "gauge",
+      "gridPos": { "x": 12, "y": 9, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "100 - (avg by (instance) (node_filesystem_avail_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}) / avg by (instance) (node_filesystem_size_bytes{mountpoint=\"/\",fstype!=\"tmpfs\"}) * 100)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "Memory Usage",
+      "type": "gauge",
+      "gridPos": { "x": 18, "y": 9, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "100 - (avg by (instance) (node_memory_MemAvailable_bytes) / avg by (instance) (node_memory_MemTotal_bytes) * 100)",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0, "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "SSL Certificate Expiry",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 13, "w": 8, "h": 3 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+          "expr": "probe_ssl_earliest_cert_expiry{job=\"blackbox-https\"} - time()",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdhms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "red", "value": 1209600 },
+              { "color": "yellow", "value": 2592000 },
+              { "color": "green", "value": 7776000 }
+            ]
+          }
+        }
+      },
+      "options": { "colorMode": "background", "textMode": "value" }
+    },
+    {
+      "id": 10,
+      "title": "Links",
+      "type": "text",
+      "gridPos": { "x": 8, "y": 13, "w": 16, "h": 3 },
+      "options": {
+        "content": "# Tools\n\n- [GlitchTip](http://100.67.52.95:8001) · [Portainer CE](http://100.67.52.95:9000) · [Grafana](http://100.67.52.95:3000)\n\n# Deployments\n\n- [KimKom Portal](https://kimkom.kimkom.net) · [KimKom Prod](https://kimkom-prod.kimkom.net) · [KimKom Dev](https://kimkom-dev.kimkom.net)\n- [SuperTCG](https://supertcg.kimkom.net) · [Vranckeneers](https://vranckeneers.kimkom.net)",
+        "mode": "markdown"
+      }
+    }
+  ]
+}
