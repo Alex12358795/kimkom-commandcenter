@@ -306,19 +306,180 @@ Use the `@sha256:...` value as `--odoo-image` in `init-client.sh` or in the `.en
 
 ## 6. Provisioning a New Production Customer
 
-### 6.1 Prerequisites
+This is the complete zero-to-live workflow. Follow every step in order.
 
-| What | Where |
-|---|---|
-| Hetzner VPS (or similar) | Clean Ubuntu 24.04, root access |
-| DNS A record | `<domain>` → VPS public IP |
-| S3 bucket | Hetzner Object Storage |
-| S3 access key + secret | For backup-v2 |
-| Tailscale auth key | https://login.tailscale.com/admin/settings/keys |
-| Odoo image digest | From CI (Section 5) |
-| GitHub deploy key | For private repo clone (optional, only if private) |
+### 6.0 Before You Start — Complete Checklist
 
-### 6.2 Run the provisioning script
+Before running any commands, collect these:
+
+| Item | Required? | Where to get it |
+|---|---|---|
+| Customer display name | Yes | Client provides |
+| Customer slug (lowercase, DNS-safe) | Yes | Set yourself (e.g., `acme`) |
+| Production domain | Yes | Client provides (e.g., `acme.com`) |
+| Hetzner VPS (or similar) | Yes | Fresh Ubuntu 24.04, at least 2 vCPU, 4 GB RAM, 40 GB disk |
+| VPS public IP | Yes | From VPS provider console |
+| VPS root password or user | Yes | From VPS provider |
+| SSH key for VPS | Yes | Usually VPS provider adds one; we add our deploy key too |
+| DNS A record | Yes | `<domain>` → VPS public IP (create before TLS phase) |
+| Hetzner Object Storage bucket | Yes | Create via Hetzner Cloud Console |
+| S3 access key + secret (for backups) | Yes | Create via Hetzner Cloud Console → Object Storage → Credentials |
+| Tailscale auth key | **Recommended** | https://login.tailscale.com/admin/settings/keys (one-time key) |
+| Odoo image digest | Yes | From CI pipeline (see Section 5.3) — `ghcr.io/alex12358795/<slug>-odoo@sha256:...` |
+| GlitchTip DSN | **Recommended** | Create project first (see Section 11.1) — store the DSN |
+| Module manifest | Yes | `clients/<slug>.yml` in KimKom-stack (see Section 6.1 below) |
+| Modules ready in kimkom-modules repo | Yes | All customer + shared modules pushed to GitHub |
+| Backup Restic password | Yes | Generate and escrow: `openssl rand -base64 32` |
+| Enterprise modules (optional) | If licensed | Exact commit SHA from Odoo's private repo |
+| OCA modules (optional) | If needed | Exact commit SHAs per repo |
+
+### 6.1 Create Module Space
+
+```bash
+# Customer-specific modules
+mkdir -p /opt/kimkom-modules/<client-slug>
+
+# If they use shared KimKom modules, ensure they're in /opt/kimkom-modules/shared/
+
+# Copy your dev modules in (if already developed)
+cp -r /opt/kimkom-commandcenter/instances/<client>/addons/* /opt/kimkom-modules/<client-slug>/
+
+# Clean up
+find /opt/kimkom-modules/<client-slug> -name '__pycache__' -exec rm -rf {} + 2>/dev/null
+find /opt/kimkom-modules/<client-slug> -name '*.pyc' -delete 2>/dev/null
+find /opt/kimkom-modules/<client-slug> -name '.git' -exec rm -rf {} + 2>/dev/null
+
+# Commit and push
+cd /opt/kimkom-modules
+git add -A
+git status
+git commit -m "feat(<client-slug>): initial client modules"
+git push origin main
+```
+
+Note the **exact commit SHA** that was pushed — you'll need this for the manifest:
+```bash
+git rev-parse HEAD  # e.g., a3c50167b58ced55cf1502c4f7efbdf25845bf3c
+```
+
+### 6.2 Create the Client Manifest
+
+Create `/opt/KimKom-stack/clients/<client-slug>.yml`:
+
+```yaml
+{
+  "schema_version": 2,
+  "display_name": "Acme Corp",
+  "slug": "acme",
+  "profiles": ["core"],
+  "target_rpo": "1h",
+  "target_rto": "4h",
+  "image": {
+    "repository": "ghcr.io/alex12358795/acme-odoo",
+    "tag": "<git-sha>"
+  },
+  "management": {
+    "provider": "tailscale",
+    "resource_id": "acme"
+  },
+  "network": {
+    "provider": "tailscale",
+    "public_address": null,
+    "private_address": null
+  },
+  "modules": {
+    "kimkom_modules_repo": "git@github.com:Alex12358795/kimkom-modules.git",
+    "kimkom_modules_ref": "a3c50167b58ced55cf1502c4f7efbdf25845bf3c",
+    "shared": [],
+    "client_dir": "acme",
+    "enterprise": null,
+    "oca": [
+      {
+        "repo": "https://github.com/OCA/server-tools.git",
+        "ref": "abc123...",
+        "modules": ["sentry"]
+      }
+    ],
+    "external": []
+  }
+}
+```
+
+**IMPORTANT:** Use exact commit SHAs for `kimkom_modules_ref` and OCA `ref` values — NOT branch names like `main` or `18.0`. Production images must be reproducible.
+
+Validate the manifest:
+```bash
+cd /opt/KimKom-stack
+python3 scripts/ci/validate-client-manifests.py
+```
+
+Commit and push:
+```bash
+cd /opt/KimKom-stack
+git add clients/<client-slug>.yml
+git commit -m "feat(<client-slug>): add client manifest"
+git push origin main
+```
+
+### 6.3 Build the Release Image
+
+Wait for CI to complete (or trigger it manually):
+1. Go to `https://github.com/Alex12358795/KimKom-stack/actions`
+2. Click "Immutable image CI" → "Run workflow"
+3. Wait for the `image` job to complete
+4. Get the image digest from the CI logs, or:
+
+```bash
+# After CI push:
+docker pull ghcr.io/alex12358795/<slug>-odoo:<git-sha>
+docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/alex12358795/<slug>-odoo:<git-sha>
+# Output: ghcr.io/alex12358795/acme-odoo@sha256:abc123...
+```
+
+Copy this full digest — you'll pass it as `--odoo-image`.
+
+### 6.4 Prepare the VPS
+
+Create the VPS with the VPS provider. Once booted:
+
+1. **Add deploy key**: Log in and add our deploy key
+```bash
+# If you have root access:
+echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuWELPp5kpEHCTjqQhJ9HNXsGjf5QMsm6OnLdEqeM9+ kimkom-deploy' >> ~/.ssh/authorized_keys
+
+# Also add the ~/.ssh/id_ed25519 key if needed for the init flow
+```
+
+2. **Verify SSH**: From CommandCenter:
+```bash
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key root@<VPS_IP> 'echo OK'
+```
+
+3. **Create DNS A record**: Point `<domain>` to the VPS public IP (do this before the TLS phase or Let's Encrypt will fail)
+
+### 6.5 Create GlitchTip Project
+
+```bash
+TOKEN=$(cat /opt/kimkom-commandcenter/secrets/commandcenter/glitchtip-api-token)
+
+# Create project
+curl -sS -X POST http://100.67.52.95:8001/api/0/teams/kimkom/kimkom/projects/ \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"<client-slug>","slug":"<client-slug>"}'
+
+# Get DSN
+curl -sS http://100.67.52.95:8001/api/0/projects/kimkom/<client-slug>/keys/ \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys,json
+keys=json.load(sys.stdin)
+print(keys[0]['dsn']['public'])
+"
+```
+
+Copy the DSN — you'll use it as `--glitchtip-dsn`.
+
+### 6.6 Provision the Server
 
 ```bash
 cd /opt/KimKom-stack
@@ -326,27 +487,77 @@ cd /opt/KimKom-stack
 ./init-client.sh \
   --server <VPS_PUBLIC_IP> \
   --client "Acme Corp" \
+  --client-slug acme \
   --domain acme.com \
   --odoo-image "ghcr.io/alex12358795/acme-odoo@sha256:abc123..." \
-  --backup-s3-key "ACME_KEY" \
-  --backup-s3-secret "ACME_SECRET" \
+  --backup-s3-key "ACME_BACKUP_KEY" \
+  --backup-s3-secret "ACME_BACKUP_SECRET" \
   --tailscale-token "tskey-auth-xxx" \
   --glitchtip-dsn "http://xxx@100.67.52.95:8001/6" \
   --commandcenter-ip "100.67.52.95" \
+  --ssh-user root \
+  --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key \
   --resume
 ```
 
-### 6.3 If it fails mid-way
+This will run all 11 phases. The script is resumable — if anything fails, just re-run with `--resume`.
 
-**Just re-run the same command with `--resume`.** The script tracks completed phases in `.provision-state` on the target server and skips them.
+### 6.7 Post-Provisioning Manual Steps
 
-If you need to redo a specific phase:
-
+1. **Portainer enrollment**: `http://100.67.52.95:9000` → Environments → Add → Docker Agent → `<tailscale-ip>:9001`
+2. **Verify HTTPS**: `curl -I https://<domain>` (should show valid Let's Encrypt cert)
+3. **Verify WebSocket**: `curl -sS -o /dev/null -w "%{http_code}" https://<domain>/websocket -H "Upgrade: websocket" -H "Connection: Upgrade" -H "Sec-WebSocket-Key: test==" -H "Sec-WebSocket-Version: 13"` (expect 101)
+4. **Verify login disabled**: `curl -sS https://<domain>/web/database/manager` (should show "disabled")
+5. **Test backup**: SSH to server and run:
 ```bash
-./init-client.sh ... --force-phase <phase-name>
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
+  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/backup.sh'
+```
+6. **Verify restore**: 
+```bash
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
+  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/verify-restore.sh'
+```
+7. **Test Telegram alert**: The Alertmanager test message was sent earlier; verify you received it
+8. **Verify GlitchTip**: Trigger a test exception in Odoo, check GlitchTip receives it
+
+### 6.8 Acceptance Checklist
+
+Before handing over to the customer:
+
+```text
+[ ] Public HTTPS login returns 200
+[ ] SSL certificate is valid (not self-signed, no -k needed)
+[ ] WebSocket returns 101
+[ ] Database manager is disabled
+[ ] list_db = False
+[ ] dbfilter is set correctly
+[ ] Dedicated PostgreSQL role exists (not shared superuser)
+[ ] Odoo image matches expected digest
+[ ] GlitchTip receives test exceptions
+[ ] Prometheus targets are up and green
+[ ] Telegram alert was received (test message sent during setup)
+[ ] Portainer endpoint is enrolled
+[ ] Online backup completes successfully
+[ ] Isolated restore verification passes
+[ ] Restic password is stored off-host (not only on the server)
+[ ] Deployed Git SHA and image digest are recorded
+[ ] Cloudflare DNS A record is set
+[ ] Customer has admin credentials (from .env on the server)
 ```
 
-Phases: `server-bootstrap`, `git-clone`, `tailscale`, `directories`, `env-setup`, `dns-preflight`, `odoo-init`, `full-stack`, `health-check`, `backup-setup`, `monitoring-onboard`
+### 6.9 Record the Deployment
+
+Store this information in a secure location:
+- Server IP + Tailscale IP
+- Domain + DNS provider
+- Image digest deployed
+- Git SHA deployed
+- PostgreSQL role + database name
+- S3 bucket name + backup credentials
+- Restic password
+- GlitchTip DSN
+- Grafana / Portainer / GlitchTip URLs (Tailscale-only)
 
 To start completely over:
 

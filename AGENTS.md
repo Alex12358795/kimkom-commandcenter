@@ -235,13 +235,23 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 
 ## Provisioning (init-client.sh)
 
-11-phase resumable provisioning with state tracking via `.provision-state` on the target server:
+11-phase resumable provisioning with state tracking via `.provision-state` on the target server. State file survives `git pull` (excluded via `.gitignore` and `git clean -e`).
 
+**Bugs fixed (commit 5658967):**
+- Argument parsing double-shift (line 135 `shift || true` removed)
+- `run_phase()` always returned 0 — now returns 1 to trigger `||` phase body
+- State file written before stack dir existed — now `mkdir -p` in `mark_phase`
+- `git clean -fd` deleted `.provision-state` — now uses `-e .provision-state -e .env -e volumes`
+- `env-setup` regenerated passwords on every run — now reuses existing `.env` if present
+- `directories` phase `install -d` failed without sudo — now falls back to `sudo -n`
+- Manifest validator only accepted schema v1 — now accepts v2 with `modules` section
+
+**Phases:**
 1. **server-bootstrap** — Docker, UFW, SSH hardening (via install.sh)
-2. **git-clone** — Clone or pull KimKom-stack repo
+2. **git-clone** — Clone or pull KimKom-stack repo (preserves `.provision-state`)
 3. **tailscale** — Enroll in Tailscale (if `--tailscale-token` provided)
 4. **directories** — Create volume dirs, set filestore ownership
-5. **env-setup** — Upload .env, dashboard auth, backup credentials
+5. **env-setup** — Upload .env, dashboard auth, backup credentials (idempotent — reuses existing `.env`)
 6. **dns-preflight** — Verify DNS resolves to target IP (no `curl -k`)
 7. **odoo-init** — Start DB, pull/build Odoo, install modules, set admin password
 8. **full-stack** — Start all Compose services
@@ -250,6 +260,11 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 11. **monitoring-onboard** — Add Prometheus/Blackbox targets on CommandCenter, create GlitchTip project
 
 Flags: `--resume`, `--force-phase <name>`, `--reset-state`, `--tailscale-token <key>`, `--commandcenter-ip <ip>`
+
+**Manifest schema v2** (`clients/<slug>.yml`):
+- `schema_version: 2` (validator accepts both 1 and 2)
+- `modules` section: `kimkom_modules_repo`, `kimkom_modules_ref`, `shared`, `client_dir`, `enterprise`, `oca`, `external`
+- CI reads manifest to checkout modules at pinned commits and build the image
 
 ## Backup System
 
