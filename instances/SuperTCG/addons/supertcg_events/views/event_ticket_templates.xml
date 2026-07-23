@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Add POS Payment barcode to full page ticket (bottom left) -->
+        <template id="event_ticket_pos_barcode" inherit_id="event.event_report_template_full_page_ticket" name="Event Ticket POS Barcode">
+            <!-- Insert POS barcode inside the left details column, right after address/date -->
+            <xpath expr="//div[hasclass('o_event_full_page_left_details')]" position="inside">
+                <div t-if="attendee and attendee.event_ticket_id and attendee.event_ticket_id.pos_barcode" class="row mt-2 ps-3">
+                    <div class="col-12">
+                        <div class="d-flex align-items-start">
+                            <i class="fa fa-barcode fa-lg me-2 mt-1 text-muted"/>
+                            <div>
+                                <div class="text-muted small mb-1" style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Betaal ter plaatse</div>
+                                <img t-attf-src="/report/barcode/EAN13/{{attendee.event_ticket_id.pos_barcode}}?width=180&amp;height=70&amp;quiet=0" 
+                                     style="max-width: 180px; height: auto;" 
+                                     alt="POS Barcode"/>
+                                <div class="text-muted small mt-1" style="font-size: 10px;">
+                                    Te betalen: € <span t-out="attendee.event_ticket_id.price" t-options="{'widget': 'float', 'precision': 2}"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </xpath>
+        </template>
+    </data>
+</odoo>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Inherit event form view to add recurring fields and buttons -->
+        <record id="view_event_form_inherit_recurring" model="ir.ui.view">
+            <field name="name">event.event.form.inherit.recurring</field>
+            <field name="model">event.event</field>
+            <field name="inherit_id" ref="event.view_event_form"/>
+            <field name="arch" type="xml">
+                <!-- Add buttons to existing button box -->
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_generate_weekly_copies" 
+                            type="object" 
+                            string="Generate Weekly Copies" 
+                            class="oe_stat_button" 
+                            icon="fa-calendar-plus-o"
+                            invisible="not is_recurring_template"
+                            help="Create weekly copies for the next 4 weeks">
+                    </button>
+                    <button name="action_preview_next_copies" 
+                            type="object" 
+                            string="Preview Next Copies" 
+                            class="oe_stat_button" 
+                            icon="fa-eye"
+                            invisible="not is_recurring_template"
+                            help="Preview what copies will be created">
+                    </button>
+                    <button name="%(action_event_waitlist_per_event)d"
+                            type="action"
+                            string="Wachtlijst"
+                            class="oe_stat_button"
+                            icon="fa-users"
+                            help="Bekijk wachtlijst inschrijvingen">
+                        <field name="waitlist_count" widget="statinfo" string="Wachtlijst"/>
+                    </button>
+                </xpath>
+                
+                <!-- Add pay at venue field after badge_image -->
+                <xpath expr="//field[@name='badge_image']" position="after">
+                    <field name="allow_pay_at_venue" invisible="not has_paid_tickets"/>
+                    <button name="action_generate_pos_barcodes" type="object" string="Generate POS Barcodes" icon="fa-barcode" class="oe_stat_button" invisible="not event_ticket_ids"/>
+                </xpath>
+                
+                <!-- Add recurring settings as a new page in the notebook -->
+                <xpath expr="//notebook" position="inside">
+                    <page string="Recurring Settings" name="recurring_settings">
+                        <group>
+                            <group>
+                                <field name="is_recurring_template" readonly="1"/>
+                                <field name="recurrence_pattern" 
+                                       invisible="not is_recurring_template"
+                                       required="is_recurring_template"
+                                       widget="radio"/>
+                            </group>
+                            <group>
+                                <field name="last_copied_date" 
+                                       invisible="not is_recurring_template"
+                                       readonly="1"/>
+                                <field name="copy_count" 
+                                       invisible="not is_recurring_template"
+                                       readonly="1"/>
+                                <field name="template_id" 
+                                       invisible="not template_id"
+                                       readonly="1"
+                                       options="{'no_create': True}"
+                                       groups="base.group_no_one"/>
+                            </group>
+                        </group>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Inherit event tree view to show template indicator -->
+        <record id="view_event_tree_inherit_recurring" model="ir.ui.view">
+            <field name="name">event.event.tree.inherit.recurring</field>
+            <field name="model">event.event</field>
+            <field name="inherit_id" ref="event.view_event_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//list" position="attributes">
+                    <attribute name="decoration-info">is_recurring_template==True</attribute>
+                </xpath>
+                
+                <xpath expr="//field[@name='stage_id']" position="attributes">
+                    <attribute name="decoration-muted">stage_id=='New'</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Search view filter for templates -->
+        <record id="view_event_search_inherit_recurring" model="ir.ui.view">
+            <field name="name">event.event.search.inherit.recurring</field>
+            <field name="model">event.event</field>
+            <field name="inherit_id" ref="event.view_event_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//filter[@name='filter_inactive']" position="after">
+                    <separator/>
+                    <filter string="Recurring Templates" 
+                            name="recurring_templates" 
+                            domain="[('stage_id.name', '=', 'Recurring Template')]"
+                            help="Show only recurring template events"/>
+                    <filter string="Copies" 
+                            name="event_copies" 
+                            domain="[('template_id', '!=', False)]"
+                            help="Show only copied events"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

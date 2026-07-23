@@ -1,0 +1,73 @@
+services:
+  web:
+    image: glitchtip/glitchtip@sha256:a1208e3c696b9d96d20f44026f73b8a15af863a9aa149a603ff3bda8600d259c
+    restart: unless-stopped
+    ports:
+      - "${MANAGEMENT_BIND_IP:-100.67.52.95}:8001:8000"
+    environment:
+      DATABASE_URL: postgres://glitchtip:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${SECRET_KEY}
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      CELERY_WORKER_CONCURRENCY: 2
+      DEFAULT_FROM_EMAIL: noreply@kimkom.net
+      ALLOWED_HOSTS: 127.0.0.1,localhost,192.168.178.19,100.67.52.95
+      GLITCHTIP_URL: http://100.67.52.95:8001
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - glitchtip
+
+  worker:
+    image: glitchtip/glitchtip@sha256:a1208e3c696b9d96d20f44026f73b8a15af863a9aa149a603ff3bda8600d259c
+    restart: unless-stopped
+    command: ./bin/run-worker.sh
+    environment:
+      DATABASE_URL: postgres://glitchtip:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${SECRET_KEY}
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      CELERY_WORKER_CONCURRENCY: 2
+      DEFAULT_FROM_EMAIL: noreply@kimkom.net
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - glitchtip
+
+  beat:
+    image: glitchtip/glitchtip@sha256:a1208e3c696b9d96d20f44026f73b8a15af863a9aa149a603ff3bda8600d259c
+    restart: unless-stopped
+    command: ./bin/run-celery-with-beat.sh
+    environment:
+      DATABASE_URL: postgres://glitchtip:${POSTGRES_PASSWORD}@postgres:5432/glitchtip
+      SECRET_KEY: ${SECRET_KEY}
+      EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+      DEFAULT_FROM_EMAIL: noreply@kimkom.net
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - glitchtip
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: glitchtip
+    networks:
+      - glitchtip
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - glitchtip
+
+networks:
+  glitchtip:
+    name: glitchtip
+    driver: bridge

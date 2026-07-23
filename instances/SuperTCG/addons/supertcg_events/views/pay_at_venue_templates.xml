@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Add payment method selection to registration modal -->
+        <template id="pay_at_venue_modal" inherit_id="website_event.registration_attendee_details" name="Pay at Venue Modal">
+            <xpath expr="//div[hasclass('modal-footer')]" position="before">
+                <div t-if="event.has_paid_tickets and event.allow_pay_at_venue" class="modal-body border-top bg-light">
+                    <h5><i class="fa fa-credit-card me-2"/>Betaling</h5>
+                    <div class="alert alert-info mb-2">
+                        <strong>Dit evenement is betalend</strong>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="payment_method" id="payment_online" value="online" checked="checked" onchange="document.getElementById('attendee_registration').action='/event/' + document.querySelector('[name=csrf_token]').closest('form').getAttribute('action').split('/').slice(2,4).join('/') + '/registration/confirm';"/>
+                        <label class="form-check-label" for="payment_online">
+                            <strong>Direct online betalen</strong>
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="payment_method" id="payment_venue" value="venue" onchange="var slug = document.querySelector('[name=csrf_token]').closest('form').getAttribute('action').split('/')[2]; document.getElementById('attendee_registration').action='/event/' + slug + '/registration/confirm-pay-at-venue';"/>
+                        <label class="form-check-label" for="payment_venue">
+                            <strong>Ter plaatse betalen</strong> (cash of kaart bij het evenement)
+                        </label>
+                    </div>
+                </div>
+            </xpath>
+        </template>
+        
+        <!-- Template for Pay at Venue confirmation page -->
+        <template id="pay_at_venue_confirmation" inherit_id="website_event.registration_complete" name="Pay at Venue Confirmation">
+            <xpath expr="//div[hasclass('o_wereg_confirmed')]" position="inside">
+                <div t-if="request.httprequest.args.get('pay_at_venue')" class="alert alert-info mt-3">
+                    <h4><i class="fa fa-store me-2"/>Betaal ter plaatse</h4>
+                    <p>Je registratie is geslaagd! Toon deze barcode aan de kassa:</p>
+                    
+                    <!-- Show POS Barcode for scanning -->
+                    <t t-set="registration" t-value="request.env['event.registration'].sudo().browse(int(request.httprequest.args.get('registration_ids', '0').split(',')[0]))"/>
+                    <t t-if="registration and registration.event_ticket_id and registration.event_ticket_id.pos_barcode">
+                        <div class="text-center my-4 bg-white p-4 rounded border">
+                            <img t-attf-src="/report/barcode/EAN13/{{registration.event_ticket_id.pos_barcode}}?width=300&amp;height=120&amp;quiet=0" 
+                                 style="max-width: 300px; height: auto;" 
+                                 alt="POS Barcode"/>
+                            <div style="font-family: monospace; font-size: 24px; letter-spacing: 4px; font-weight: bold; margin-top: 10px;">
+                                <span t-out="registration.event_ticket_id.pos_barcode"/>
+                            </div>
+                            <p class="small text-muted mt-2">Toon deze code aan het personeel bij de kassa</p>
+                        </div>
+                    </t>
+                    
+                    <p class="lead">
+                        Te betalen: <strong>€ <span t-out="request.httprequest.args.get('fee', '0')"/></strong>
+                    </p>
+                </div>
+            </xpath>
+            
+            <!-- Add download barcode button next to calendar buttons -->
+            <xpath expr="//div[@id='add_to_calendar']" position="inside">
+                <t t-if="request.httprequest.args.get('pay_at_venue')">
+                    <t t-set="registration" t-value="request.env['event.registration'].sudo().browse(int(request.httprequest.args.get('registration_ids', '0').split(',')[0]))"/>
+                    <t t-if="registration and registration.event_ticket_id and registration.event_ticket_id.pos_barcode">
+                        <a role="button" class="o_download_barcode btn btn-block bg-white" 
+                           t-attf-href="/report/barcode/EAN13/{{registration.event_ticket_id.pos_barcode}}?width=600&amp;height=240&amp;quiet=0" 
+                           download="barcode-{{registration.event_ticket_id.pos_barcode}}.png">
+                            <i class="fa fa-download me-2"/>
+                            Download registratie barcode
+                        </a>
+                    </t>
+                </t>
+            </xpath>
+        </template>
+        
+        <!-- Show POS barcode in ticket access section for pending payments -->
+        <template id="pay_at_venue_ticket_info" inherit_id="website_event.registration_ticket_access" name="Pay at Venue Ticket Info">
+            <xpath expr="//div[hasclass('o_wevent_registration_ticket_access')]" position="inside">
+                <t t-set="pending_attendees" t-value="attendees.filtered(lambda a: a.payment_status == 'pending' and a.event_ticket_id)"/>
+                <div t-if="event.has_paid_tickets and pending_attendees" class="col-12 mt-3">
+                    <div class="alert alert-warning">
+                        <h5><i class="fa fa-exclamation-triangle me-2"/>Betaling vereist</h5>
+                        <p>Je hebt gekozen om ter plaatse te betalen. Toon de barcode bij de kassa:</p>
+                        <p class="mb-0">
+                            <strong>Te betalen: € <span t-out="pending_attendees[0].event_ticket_id.price if pending_attendees else 0"/></strong>
+                        </p>
+                    </div>
+                </div>
+            </xpath>
+        </template>
+    </data>
+</odoo>

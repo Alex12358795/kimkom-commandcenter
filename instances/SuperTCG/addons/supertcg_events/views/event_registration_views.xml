@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Add reference number and payment status to attendee list view -->
+        <record model="ir.ui.view" id="view_event_registration_tree_inherit_pay_at_venue">
+            <field name="name">event.registration.list.inherit.pay_at_venue</field>
+            <field name="model">event.registration</field>
+            <field name="inherit_id" ref="event.view_event_registration_tree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='event_ticket_id']" position="after">
+                    <field name="pay_at_venue" optional="show" widget="boolean_toggle"/>
+                    <field name="payment_status" optional="show" widget="badge" 
+                           decoration-warning="payment_status == 'pending'"
+                           decoration-success="payment_status == 'paid'"/>
+                </xpath>
+            </field>
+        </record>
+        
+        <!-- Add POS barcode to event ticket tree view -->
+        <record model="ir.ui.view" id="view_event_event_ticket_tree_inherit_barcode">
+            <field name="name">event.event.ticket.tree.inherit.barcode</field>
+            <field name="model">event.event.ticket</field>
+            <field name="inherit_id" ref="event.event_event_ticket_view_tree_from_event"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='price']" position="after">
+                    <field name="pos_barcode" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+        
+        <!-- Add POS barcode to event ticket form view -->
+        <record model="ir.ui.view" id="view_event_event_ticket_form_inherit_barcode">
+            <field name="name">event.event.ticket.form.inherit.barcode</field>
+            <field name="model">event.event.ticket</field>
+            <field name="inherit_id" ref="event.event_event_ticket_view_form_from_event"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='price']" position="after">
+                    <field name="pos_barcode"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

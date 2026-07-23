@@ -1,0 +1,39 @@
+services:
+  odoo:
+    build: .
+    container_name: odoo-supertcg
+    restart: unless-stopped
+    expose:
+      - 8069
+      - 8072
+    volumes:
+      - ./config/odoo.conf:/etc/odoo/odoo.conf:ro
+      - ./addons:/mnt/extra-addons
+      - ./addons-enterprise:/mnt/extra-enterprise
+      - ./addons-oca:/mnt/extra-oca
+      - ./data:/var/lib/odoo/data
+    environment:
+      DB_HOST: odoo-postgres
+      DB_PORT: 5432
+      DB_USER: odoo
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: odooSuperTCG
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.supertcg.rule=Host(`supertcg.kimkom.net`)
+      - traefik.http.routers.supertcg.entrypoints=http
+      - traefik.http.routers.supertcg.service=supertcg
+      - "traefik.http.routers.supertcg.middlewares=login-rate-limit@file"
+      - traefik.http.services.supertcg.loadbalancer.server.port=8069
+      - "traefik.http.routers.supertcg-websocket.rule=Host(`supertcg.kimkom.net`) && PathPrefix(`/websocket`)"
+      - traefik.http.routers.supertcg-websocket.entrypoints=http
+      - traefik.http.routers.supertcg-websocket.priority=100
+      - traefik.http.routers.supertcg-websocket.service=supertcg-websocket
+      - traefik.http.services.supertcg-websocket.loadbalancer.server.port=8072
+    networks:
+      - odoo-proxy
+
+networks:
+  odoo-proxy:
+    name: odoo-proxy
+    external: true

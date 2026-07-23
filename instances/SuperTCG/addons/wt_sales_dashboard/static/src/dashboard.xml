@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="wt_sales_dashboard.SalesDashboard" owl="1">
+        <div class="o_action_wt_sales_dashboard_dashboard">
+            <div class="o_control_panel">
+                <div class="o_cp_left">
+                    <div class="o_cp_title">
+                        <h1 class="o_breadcrumb">Sales &amp; Inventory Dashboard</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="o_content p-4 lg:p-6">
+                <!-- KPI Cards -->
+                <div class="kpi-grid mb-6">
+                    <div class="bg-white p-5 rounded-md shadow-sm border cursor-pointer hover:bg-gray-50" t-on-click="() => this.openTotalSales()">
+                        <h2 class="text-gray-500 text-sm font-medium">Total Sales (30 Days)</h2>
+                        <p class="text-3xl font-bold text-gray-800 mt-2">
+                            <t t-esc="state.kpis.total_sales.toLocaleString('en-US', { style: 'currency', currency: 'USD' })"/>
+                        </p>
+                    </div>
+                    <div class="bg-white p-5 rounded-md shadow-sm border">
+                        <h2 class="text-gray-500 text-sm font-medium">Average Order Value</h2>
+                        <p class="text-3xl font-bold text-gray-800 mt-2">
+                            <t t-esc="state.kpis.avg_order_value.toLocaleString('en-US', { style: 'currency', currency: 'USD' })"/>
+                        </p>
+                    </div>
+                    <div class="bg-white p-5 rounded-md shadow-sm border cursor-pointer hover:bg-gray-50" t-on-click="() => this.openTotalOrders()">
+                        <h2 class="text-gray-500 text-sm font-medium">Total Orders</h2>
+                        <p class="text-3xl font-bold text-gray-800 mt-2">
+                            <t t-esc="state.kpis.order_count"/>
+                        </p>
+                    </div>
+                    <div class="bg-white p-5 rounded-md shadow-sm border cursor-pointer hover:bg-gray-50" t-on-click="() => this.openLowStockProducts()">
+                        <h2 class="text-gray-500 text-sm font-medium">Low Stock Products</h2>
+                        <p class="text-3xl font-bold text-red-500 mt-2">
+                            <t t-esc="state.kpis.low_stock_products"/>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="charts-grid mt-3 mb-6">
+                    <div class="bg-white p-5 rounded-md shadow-sm border">
+                        <h3 class="font-semibold text-lg text-gray-800 mb-4">Sales Trend</h3>
+                        <div class="h-80">
+                            <canvas t-ref="salesTrendChart"/>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-md shadow-sm border">
+                        <h3 class="font-semibold text-lg text-gray-800 mb-4">Top 5 Selling Products</h3>
+                        <div class="h-80">
+                            <canvas t-ref="topProductsChart"/>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Orders Table -->
+                <div class="bg-white p-5 mt-3 rounded-md shadow-sm border responsive-table ">
+                    <h3 class="font-semibold text-lg text-gray-800 mb-4">Recent Sales Orders</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-sm text-gray-500 border-b">
+                                    <th class="py-2 px-4 font-semibold">Order #</th>
+                                    <th class="py-2 px-4 font-semibold">Customer</th>
+                                    <th class="py-2 px-4 font-semibold">Date</th>
+                                    <th class="py-2 px-4 font-semibold">Total</th>
+                                    <th class="py-2 px-4 font-semibold">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.recent_orders" t-as="order" t-key="order.id">
+                                    <tr class="hover:bg-gray-50 cursor-pointer border-b" t-on-click="() => this.openSaleOrder(order.id)">
+                                        <td class="py-3 px-4 text-blue-600 font-medium"><t t-esc="order.name"/></td>
+                                        <td class="py-3 px-4"><t t-esc="order.partner"/></td>
+                                        <td class="py-3 px-4"><t t-esc="order.date"/></td>
+                                        <td class="py-3 px-4"><t t-esc="order.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })"/></td>
+                                        <td class="py-3 px-4">
+                                            <span class="px-2 py-1 text-xs font-semibold rounded-full"
+                                                  t-att-class="{
+                                                    'bg-green-100 text-green-800': order.state === 'Sales Order',
+                                                    'bg-blue-100 text-blue-800': order.state === 'Quotation'
+                                                  }">
+                                                <t t-esc="order.state"/>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

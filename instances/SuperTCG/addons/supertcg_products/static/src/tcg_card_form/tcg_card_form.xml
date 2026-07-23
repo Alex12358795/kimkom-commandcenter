@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates xml:space="preserve">
+
+<t t-name="supertcg_products.TcgCardForm">
+    <div class="tcg-app">
+        <!-- Sticky Header -->
+        <div class="tcg-header">
+            <button class="tcg-header-back" t-on-click="onGoBack" aria-label="Back">&#8592;</button>
+            <img src="/supertcg_products/static/src/img/header_logo.png" style="height:24px; margin-right:8px;" alt="SuperTCG"/>
+            <div class="tcg-header-title">Losse kaarten stock</div>
+            <div class="tcg-header-count" t-if="state.sessionCount > 0">
+                <span class="tcg-badge" t-esc="state.sessionCount"/>
+            </div>
+        </div>
+
+        <!-- Session Summary Modal -->
+        <div class="tcg-modal-overlay" t-if="state.showSessionSummary">
+            <div class="tcg-modal">
+                <h3 class="tcg-modal-title">Session Summary</h3>
+                <p class="tcg-modal-count">
+                    <span t-esc="state.sessionCount"/> card<span t-if="state.sessionCount !== 1">s</span> added
+                </p>
+                <div class="tcg-modal-list">
+                    <div t-foreach="state.sessionProducts" t-as="sp" t-key="sp.id" class="tcg-modal-item">
+                        <span t-esc="sp.name"/>
+                    </div>
+                </div>
+                <div class="tcg-modal-actions">
+                    <button class="tcg-btn tcg-btn-primary" t-on-click="onPrintAllLabels">Print All Labels</button>
+                    <button class="tcg-btn tcg-btn-secondary" t-on-click="onCloseSession">Done</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div class="tcg-toast" t-if="state.toast"
+             t-att-class="state.toast.type === 'error' ? 'tcg-toast-error' : 'tcg-toast-success'">
+            <span t-esc="state.toast.message"/>
+        </div>
+
+        <!-- Form Body -->
+        <div class="tcg-body">
+            <!-- Consignment Banner -->
+            <div class="tcg-consignment-banner" t-if="state.consignmentMode">
+                <span class="tcg-consignment-banner-label">Consignment</span>
+                <span class="tcg-consignment-banner-owner">Owner: <t t-esc="state.consignmentPartnerName"/></span>
+            </div>
+
+            <!-- Employee & PO Info -->
+            <div class="tcg-employee-bar" t-if="state.employeeName">
+                <span class="tcg-employee-bar-text">Employee: <t t-esc="state.employeeName"/></span>
+                <span class="tcg-employee-bar-po" t-if="state.linkedPoId"> | PO linked</span>
+            </div>
+
+            <!-- Tax Warning -->
+            <div class="tcg-tax-warning" t-if="state.taxWarning">
+                <span t-esc="state.taxWarning"/>
+            </div>
+
+            <!-- Photo Strip -->
+            <div class="tcg-section tcg-photos-section">
+                <label class="tcg-label">Photos</label>
+                <div class="tcg-photos-strip">
+                    <t t-foreach="state.photos" t-as="photo" t-key="photo.id">
+                        <div class="tcg-photo-thumb">
+                            <img t-att-src="photo.preview" alt="Card photo"/>
+                            <button class="tcg-photo-remove" t-on-click="() => this.removePhoto(photo.id)">&#10005;</button>
+                            <span class="tcg-photo-main" t-if="photo_index === 0">Main</span>
+                        </div>
+                    </t>
+                    <div class="tcg-photo-add-buttons">
+                        <label class="tcg-photo-btn" title="Take photo">
+                            <span class="tcg-photo-btn-icon">&#128247;</span>
+                            <span class="tcg-photo-btn-label">Camera</span>
+                            <input type="file" accept="image/*" capture="environment" class="tcg-file-input"
+                                   t-on-change="onFileUpload"/>
+                        </label>
+                        <label class="tcg-photo-btn" title="Upload photo">
+                            <span class="tcg-photo-btn-icon">&#128193;</span>
+                            <span class="tcg-photo-btn-label">Upload</span>
+                            <input type="file" accept="image/*" multiple="1" class="tcg-file-input"
+                                   t-on-change="onFileUpload"/>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Name -->
+            <div class="tcg-section">
+                <label class="tcg-label" for="tcg_name">Name <span class="tcg-required">*</span></label>
+                <div class="tcg-name-search">
+                    <input id="tcg_name" t-ref="nameInput" type="text" class="tcg-input"
+                           placeholder="e.g. Charizard - Base Set"
+                           t-model="state.name"
+                           t-on-input="onNameInput"
+                           t-on-blur="onNameBlur"
+                           t-att-class="{'tcg-input-error': state.errors.name}"/>
+                    <div class="tcg-name-dropdown" t-if="state.productSearchOpen">
+                        <div t-foreach="state.productSearchResults" t-as="prod" t-key="prod.id"
+                             class="tcg-name-dropdown-item"
+                             t-on-click="() => this.onSelectProduct(prod.id)">
+                            <span t-esc="prod.name"/>
+                        </div>
+                    </div>
+                </div>
+                <span class="tcg-name-hint" t-if="state.selectedProductId">
+                    Existing product loaded. Edit fields and save to add to session.
+                </span>
+                <span class="tcg-error" t-if="state.errors.name" t-esc="state.errors.name"/>
+            </div>
+
+            <!-- Sales Price -->
+            <div class="tcg-section">
+                <label class="tcg-label" for="tcg_list_price">Sales Price <span class="tcg-required">*</span></label>
+                <div class="tcg-input-group">
+                    <input id="tcg_list_price" type="number" step="0.01" min="0" class="tcg-input tcg-input-price"
+                           placeholder="0.00"
+                           t-model="state.listPrice"
+                           t-on-input="onPriceInput"
+                           t-att-class="{'tcg-input-error': state.errors.listPrice}"/>
+                    <span class="tcg-input-addon">EUR</span>
+                </div>
+                <span class="tcg-error" t-if="state.errors.listPrice" t-esc="state.errors.listPrice"/>
+            </div>
+
+            <!-- Cost -->
+            <div class="tcg-section">
+                <label class="tcg-label" for="tcg_standard_price">Cost <span class="tcg-required">*</span></label>
+                <div class="tcg-input-group">
+                    <input id="tcg_standard_price" type="number" step="0.01" min="0" class="tcg-input tcg-input-price"
+                           placeholder="0.00"
+                           t-model="state.standardPrice"
+                           t-on-input="onPriceInput"
+                           t-att-class="{'tcg-input-error': state.errors.standardPrice}"/>
+                    <span class="tcg-input-addon">EUR</span>
+                </div>
+                <span class="tcg-error" t-if="state.errors.standardPrice" t-esc="state.errors.standardPrice"/>
+            </div>
+
+            <!-- Price Warning -->
+            <div class="tcg-price-warning" t-if="state.priceWarning">
+                <span t-esc="state.priceWarning"/>
+            </div>
+
+            <!-- Category (hidden when pre-selected from dashboard) -->
+            <div class="tcg-section" t-if="!state.categPreselected">
+                <label class="tcg-label" for="tcg_categ">Category <span class="tcg-required">*</span></label>
+                <select id="tcg_categ" class="tcg-input tcg-select"
+                        t-on-change="onCategChange"
+                        t-att-class="{'tcg-input-error': state.errors.categId}">
+                    <option value="">Select a category...</option>
+                    <t t-foreach="state.categories" t-as="cat" t-key="cat.id">
+                        <option t-att-value="cat.id" t-att-selected="state.categId === cat.id">
+                            <t t-esc="cat.display_name"/>
+                        </option>
+                    </t>
+                </select>
+                <span class="tcg-error" t-if="state.errors.categId" t-esc="state.errors.categId"/>
+            </div>
+
+            <!-- Condition -->
+            <div class="tcg-section">
+                <label class="tcg-label">Condition <span class="tcg-required">*</span></label>
+                <div class="tcg-condition-selector">
+                    <button class="tcg-condition-pill" t-att-class="{'selected': state.condition === 'NM'}" t-on-click="() => this.onConditionChange('NM')">
+                        <span class="tcg-condition-code">NM</span>
+                        <span class="tcg-condition-name">Near Mint</span>
+                    </button>
+                    <button class="tcg-condition-pill" t-att-class="{'selected': state.condition === 'LP'}" t-on-click="() => this.onConditionChange('LP')">
+                        <span class="tcg-condition-code">LP</span>
+                        <span class="tcg-condition-name">Lightly Played</span>
+                    </button>
+                    <button class="tcg-condition-pill" t-att-class="{'selected': state.condition === 'MP'}" t-on-click="() => this.onConditionChange('MP')">
+                        <span class="tcg-condition-code">MP</span>
+                        <span class="tcg-condition-name">Moderately Played</span>
+                    </button>
+                    <button class="tcg-condition-pill" t-att-class="{'selected': state.condition === 'HP'}" t-on-click="() => this.onConditionChange('HP')">
+                        <span class="tcg-condition-code">HP</span>
+                        <span class="tcg-condition-name">Heavily Played</span>
+                    </button>
+                    <button class="tcg-condition-pill" t-att-class="{'selected': state.condition === 'DAM'}" t-on-click="() => this.onConditionChange('DAM')">
+                        <span class="tcg-condition-code">DAM</span>
+                        <span class="tcg-condition-name">Damaged</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Customer Taxes -->
+            <div class="tcg-section">
+                <label class="tcg-label">Customer Taxes</label>
+                <div class="tcg-tax-tags">
+                    <t t-if="state.defaultTaxes.sale_tax_id &amp;&amp; state.defaultTaxes.sale_tax_name">
+                        <span class="tcg-tax-tag" t-esc="state.defaultTaxes.sale_tax_name"/>
+                    </t>
+                    <t t-else="">
+                        <span class="tcg-tax-tag tcg-tax-missing">No default found</span>
+                    </t>
+                </div>
+            </div>
+
+            <!-- Vendor Taxes -->
+            <div class="tcg-section">
+                <label class="tcg-label">Vendor Taxes</label>
+                <div class="tcg-tax-tags">
+                    <t t-if="state.defaultTaxes.purchase_tax_id &amp;&amp; state.defaultTaxes.purchase_tax_name">
+                        <span class="tcg-tax-tag" t-esc="state.defaultTaxes.purchase_tax_name"/>
+                    </t>
+                    <t t-else="">
+                        <span class="tcg-tax-tag tcg-tax-missing">No default found</span>
+                    </t>
+                </div>
+            </div>
+
+            <!-- On-Hand Quantity -->
+            <div class="tcg-section">
+                <label class="tcg-label" for="tcg_qty">On-Hand Quantity</label>
+                <input id="tcg_qty" type="number" min="0" step="1" class="tcg-input tcg-input-qty"
+                       t-model="state.onHandQty"
+                       t-on-change="onQtyChange"/>
+            </div>
+
+            <!-- Bottom spacer for sticky footer -->
+            <div class="tcg-footer-spacer"/>
+        </div>
+
+        <!-- Sticky Footer -->
+        <div class="tcg-footer">
+            <button class="tcg-btn tcg-btn-primary tcg-footer-btn"
+                    t-on-click="onSaveAndAddAnother"
+                    t-att-disabled="state.isSaving">
+                <t t-if="state.isSaving">Saving...</t>
+                <t t-else="">Save &amp; Add Another</t>
+            </button>
+            <button class="tcg-btn tcg-btn-secondary tcg-footer-btn"
+                    t-on-click="onFinishSession"
+                    t-att-disabled="state.isSaving">
+                <t t-if="state.isSaving">Saving...</t>
+                <t t-elif="state.sessionCount > 0">Finish Session (<t t-esc="state.sessionCount"/> cards)</t>
+                <t t-else="">Finish</t>
+            </button>
+        </div>
+    </div>
+</t>
+
+</templates>

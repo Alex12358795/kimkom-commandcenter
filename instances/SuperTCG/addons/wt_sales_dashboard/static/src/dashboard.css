@@ -1,0 +1,77 @@
+.o_control_panel .o_cp_title {
+    flex: 1;             
+    text-align: center;     
+}
+.o_action_wt_sales_dashboard_dashboard {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Content area */
+.o_action_wt_sales_dashboard_dashboard .o_content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+/* KPI Cards responsiveness */
+.o_action_wt_sales_dashboard_dashboard .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+/* Tablet view */
+@media (min-width: 768px) {
+    .o_action_wt_sales_dashboard_dashboard .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Desktop view */
+@media (min-width: 1024px) {
+    .o_action_wt_sales_dashboard_dashboard .kpi-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+/* Charts responsiveness */
+.o_action_wt_sales_dashboard_dashboard .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr)); 
+    gap: 1rem;
+}
+
+/* Tablet view */
+@media (min-width: 768px) {
+    .o_action_wt_sales_dashboard_dashboard .charts-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Charts section responsiveness */
+@media (max-width: 767px) {
+    .o_action_wt_sales_dashboard_dashboard .h-80 {
+        height: 300px; 
+    }
+}
+
+/* Table container responsive */
+.responsive-table {
+    width: 100%;
+}
+
+.responsive-table table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.responsive-table th,
+.responsive-table td {
+    padding: 6px;
+    white-space: nowrap;   
+    overflow: hidden;         
+    text-overflow: clip;    
+    font-size: clamp(8px, 1.5vw, 14px); 
+}

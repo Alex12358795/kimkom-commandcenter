@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- New Event Stage: Recurring Template -->
+        <record id="event_stage_recurring_template" model="event.stage">
+            <field name="name">Recurring Template</field>
+            <field name="description">Events in this stage are templates for automatic recurring copies</field>
+            <field name="sequence">4</field>
+            <field name="fold">false</field>
+            <field name="pipe_end">false</field>
+            <field name="legend_normal">In Progress</field>
+            <field name="legend_blocked">Blocked</field>
+            <field name="legend_done">Ready for Next Stage</field>
+        </record>
+    </data>
+</odoo>

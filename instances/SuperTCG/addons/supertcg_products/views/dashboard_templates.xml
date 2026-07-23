@@ -1,0 +1,607 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="tcg_dashboard" name="TCG Dashboard">
+        <t t-call="web.html_container">
+            <t t-call="web.layout">
+                <t t-set="head">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+                    <t t-set="partner_action_id" t-value="partner_action_id"/>
+                    <t t-set="consignment_enabled" t-value="consignment_enabled"/>
+                    <style>
+                        body, #wrapwrap, .oe_structure, main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }
+                        * { box-sizing: border-box; }
+                        body { margin: 0; padding: 0; background: #f5f5f5; -webkit-font-smoothing: antialiased; }
+                        .tcg-dash { width: 100%; max-width: 600px; margin: 0 auto; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+                        .tcg-dash-header { display: flex; align-items: center; padding: 12px 16px; background: #714B67; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .tcg-dash-header-back { color: white; text-decoration: none; font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+                        .tcg-dash-header-title { flex: 1; font-size: 18px; font-weight: 600; }
+                        .tcg-dash-body { padding: 16px; }
+                        .tcg-dash-title { font-size: 24px; color: #714B67; margin: 0 0 4px 0; }
+                        .tcg-dash-subtitle { color: #666; font-size: 14px; margin: 0 0 24px 0; }
+
+                        .tcg-card-selector { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+                        .tcg-selector-tile { display: block; border-radius: 16px; padding: 28px; text-decoration: none; color: white; transition: transform 0.2s, box-shadow 0.2s; -webkit-tap-highlight-color: transparent; cursor: pointer; border: none; text-align: left; width: 100%; }
+                        .tcg-selector-tile:hover { transform: translateY(-2px); color: white; }
+                        .tcg-selector-tile:active { transform: scale(0.98); }
+                        .tcg-selector-stock { background: linear-gradient(135deg, #714B67, #875A7B); box-shadow: 0 4px 15px rgba(113, 75, 103, 0.3); }
+                        .tcg-selector-stock:hover { box-shadow: 0 8px 25px rgba(113, 75, 103, 0.4); }
+                        .tcg-selector-consignment { background: linear-gradient(135deg, #5b8c5a, #6fa86e); box-shadow: 0 4px 15px rgba(91, 140, 90, 0.3); }
+                        .tcg-selector-consignment:hover { box-shadow: 0 8px 25px rgba(91, 140, 90, 0.4); }
+                        .tcg-selector-icon { font-size: 40px; margin-bottom: 12px; }
+                        .tcg-selector-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+                        .tcg-selector-desc { font-size: 14px; opacity: 0.85; line-height: 1.4; }
+
+                        .tcg-form-view { display: none; }
+                        .tcg-form-view.active { display: block; }
+                        .tcg-form-back { display: inline-flex; align-items: center; gap: 6px; background: none; border: none; color: #714B67; font-size: 15px; font-weight: 600; cursor: pointer; padding: 8px 0; margin-bottom: 16px; }
+                        .tcg-form-back:hover { text-decoration: underline; }
+                        .tcg-form-heading { font-size: 20px; font-weight: 600; margin: 0 0 4px 0; }
+                        .tcg-form-heading-stock { color: #714B67; }
+                        .tcg-form-heading-consignment { color: #5b8c5a; }
+                        .tcg-form-subtitle { color: #666; font-size: 14px; margin: 0 0 20px 0; }
+
+                        .tcg-dash-section { margin-bottom: 20px; padding: 16px; background: white; border-radius: 12px; border: 1px solid #e5e5e5; }
+                        .tcg-dash-row { margin-bottom: 16px; }
+                        .tcg-dash-row:last-child { margin-bottom: 0; }
+                        .tcg-dash-label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px; }
+                        .tcg-dash-required { color: #dc3545; }
+                        .tcg-dash-select { width: 100%; box-sizing: border-box; padding: 12px 40px 12px 14px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 16px; background: white; -webkit-appearance: none; appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; color: #333; }
+                        .tcg-dash-select:focus { outline: none; border-color: #714B67; box-shadow: 0 0 0 3px rgba(113,75,103,0.15); }
+                        .tcg-dash-hint { font-size: 12px; color: #999; margin-top: 8px; line-height: 1.4; }
+
+                        .tcg-action-tile { display: block; border-radius: 16px; padding: 28px; text-decoration: none; color: white; transition: transform 0.2s, box-shadow 0.2s; -webkit-tap-highlight-color: transparent; }
+                        .tcg-action-tile:hover { transform: translateY(-2px); color: white; }
+                        .tcg-action-tile:active { transform: scale(0.98); }
+                        .tcg-action-tile-stock { background: linear-gradient(135deg, #714B67, #875A7B); box-shadow: 0 4px 15px rgba(113, 75, 103, 0.3); }
+                        .tcg-action-tile-stock:hover { box-shadow: 0 8px 25px rgba(113, 75, 103, 0.4); }
+                        .tcg-action-tile-consignment { background: linear-gradient(135deg, #5b8c5a, #6fa86e); box-shadow: 0 4px 15px rgba(91, 140, 90, 0.3); }
+                        .tcg-action-tile-consignment:hover { box-shadow: 0 8px 25px rgba(91, 140, 90, 0.4); }
+                        .tcg-action-tile-icon { font-size: 40px; margin-bottom: 12px; }
+                        .tcg-action-tile-title { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+                        .tcg-action-tile-desc { font-size: 14px; opacity: 0.85; line-height: 1.4; }
+                        .tcg-action-tile-badge { display: inline-block; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-top: 14px; }
+                        .tcg-action-tile-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+                        .tcg-dash-warning { background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 10px 14px; margin-top: 16px; font-size: 13px; color: #856404; line-height: 1.4; }
+
+                        .tcg-autocomplete { position: relative; }
+                        .tcg-autocomplete input { width: 100%; padding: 12px 14px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 16px; background: white; -webkit-appearance: none; appearance: none; }
+                        .tcg-autocomplete input:focus { outline: none; border-color: #5b8c5a; box-shadow: 0 0 0 3px rgba(91,140,90,0.15); }
+                        .tcg-autocomplete-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; border-radius: 0 0 10px 10px; max-height: 240px; overflow-y: auto; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.1); display: none; }
+                        .tcg-autocomplete-dropdown.open { display: block; }
+                        .tcg-autocomplete-item { padding: 10px 14px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+                        .tcg-autocomplete-item:hover { background: #f0f5f0; }
+                        .tcg-autocomplete-item:last-child { border-bottom: none; }
+                        .tcg-autocomplete-create { padding: 10px 14px; cursor: pointer; font-size: 14px; color: #5b8c5a; font-weight: 600; border-top: 1px solid #eee; }
+                        .tcg-autocomplete-create:hover { background: #f0f5f0; }
+                        .tcg-autocomplete-selected { display: none; padding: 8px 12px; background: #eaf2ea; border-radius: 8px; font-size: 14px; margin-top: 6px; }
+                        .tcg-autocomplete-selected.show { display: flex; align-items: center; justify-content: space-between; }
+                        .tcg-autocomplete-clear { background: none; border: none; color: #999; font-size: 18px; cursor: pointer; padding: 0 4px; }
+                        .tcg-autocomplete-edit { background: none; border: none; color: #5b8c5a; font-size: 13px; cursor: pointer; padding: 0 4px; text-decoration: underline; }
+
+                        .tcg-log { margin-top: 32px; }
+                        .tcg-log-title { font-size: 18px; font-weight: 600; color: #714B67; margin-bottom: 12px; }
+                        .tcg-log-empty { color: #999; font-size: 14px; font-style: italic; }
+                        .tcg-log-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 8px; transition: box-shadow 0.2s; }
+                        .tcg-log-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+                        .tcg-log-badges { display: flex; flex-direction: column; gap: 4px; }
+                        .tcg-log-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; color: white; white-space: nowrap; cursor: pointer; text-decoration: none; }
+                        .tcg-log-badge:hover { opacity: 0.85; }
+                        .tcg-log-badge.stock { background: #714B67; }
+                        .tcg-log-badge.consignment { background: #5b8c5a; }
+                        .tcg-log-info { flex: 1; min-width: 0; }
+                        .tcg-log-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+                        .tcg-log-page-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 13px; cursor: pointer; }
+                        .tcg-log-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+                        .tcg-log-name { font-weight: 600; font-size: 14px; color: #333; }
+                        .tcg-log-detail { font-size: 12px; color: #666; margin-top: 2px; }
+                        .tcg-log-date { font-size: 11px; color: #999; margin-top: 2px; }
+
+                        @media (max-width: 600px) {
+                            .tcg-dash { max-width: 100%; }
+                            .tcg-dash-body { padding: 12px; }
+                            .tcg-dash-section { padding: 12px; }
+                            .tcg-dash-title { font-size: 20px; }
+                            .tcg-selector-tile, .tcg-action-tile { padding: 20px; }
+                            .tcg-selector-icon, .tcg-action-tile-icon { font-size: 32px; }
+                            .tcg-selector-title, .tcg-action-tile-title { font-size: 18px; }
+                        }
+                    </style>
+                </t>
+                <div class="tcg-dash">
+                    <div class="tcg-dash-header">
+                        <a href="/odoo" class="tcg-dash-header-back" aria-label="Back">&#8592;</a>
+                        <img src="/supertcg_products/static/src/img/header_logo.png" style="height:28px; margin-right:10px;" alt="SuperTCG"/>
+                        <div class="tcg-dash-header-title">Losse kaarten stock</div>
+                    </div>
+
+                    <div class="tcg-dash-body">
+                        <!-- ===== STEP 1: Card Selector ===== -->
+                        <div id="tcg_selector_view">
+                            <h1 class="tcg-dash-title">Card Entry</h1>
+                            <p class="tcg-dash-subtitle">Choose a stock type to get started</p>
+                            <div class="tcg-card-selector">
+                                <button class="tcg-selector-tile tcg-selector-stock" onclick="showStockForm()">
+                                    <div class="tcg-selector-icon">&#x1F0CF;</div>
+                                    <div class="tcg-selector-title">SuperTCG Stock</div>
+                                    <div class="tcg-selector-desc">Cards you own and sell. Add to your own inventory with barcode labels.</div>
+                                </button>
+                                <button class="tcg-selector-tile tcg-selector-consignment" onclick="showConsignmentForm()">
+                                    <div class="tcg-selector-icon">&#x1F91D;</div>
+                                    <div class="tcg-selector-title">Consignment Stock</div>
+                                    <div class="tcg-selector-desc">Cards owned by a partner. Stock is tracked but ownership stays with the partner.</div>
+                                </button>
+                            </div>
+
+                            <!-- Recent Additions Log -->
+                            <div class="tcg-log" id="tcg_log_section" style="display:none;">
+                                <div class="tcg-log-title">Recent Additions</div>
+                                <div id="tcg_log_list"></div>
+                                <div class="tcg-log-pagination" id="tcg_log_pagination"></div>
+                            </div>
+                        </div>
+
+                        <!-- ===== STEP 2A: SuperTCG Stock Form ===== -->
+                        <div id="tcg_stock_view" class="tcg-form-view">
+                            <button class="tcg-form-back" onclick="showSelector()">&#8592; Back</button>
+                            <h2 class="tcg-form-heading tcg-form-heading-stock">SuperTCG Stock</h2>
+                            <p class="tcg-form-subtitle">Cards you own and sell</p>
+
+                            <div class="tcg-dash-section">
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_stock_employee">Employee <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_stock_employee" class="tcg-dash-select">
+                                        <option value="">Select employee...</option>
+                                    </select>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_stock_categ">Category <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_stock_categ" class="tcg-dash-select">
+                                        <option value="">Choose a category...</option>
+                                        <t t-foreach="categories" t-as="cat">
+                                            <option t-att-value="cat['id']">
+                                                <t t-esc="cat['display_name']"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_stock_location">Stock Location <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_stock_location" class="tcg-dash-select">
+                                        <option value="">Choose a stock location...</option>
+                                        <t t-foreach="locations" t-as="loc">
+                                            <option t-att-value="loc['id']">
+                                                <t t-esc="loc['display_name']"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_stock_po">Linked Purchase Order <span style="color:#999;">(optional)</span></label>
+                                    <select id="tcg_stock_po" class="tcg-dash-select">
+                                        <option value="">No PO</option>
+                                    </select>
+                                    <div class="tcg-dash-hint">Link to a buy-in PO to track which cards came from which purchase.</div>
+                                </div>
+                                <div class="tcg-dash-hint">Employee, category and location carry over for bulk entry.</div>
+                            </div>
+
+                            <a id="tcg_stock_tile" href="#" class="tcg-action-tile tcg-action-tile-stock tcg-action-tile-disabled">
+                                <div class="tcg-action-tile-icon">&#x1F0CF;</div>
+                                <div class="tcg-action-tile-title">Add TCG Card</div>
+                                <div class="tcg-action-tile-desc">Capture photos, enter card details, and print barcode labels.</div>
+                                <span class="tcg-action-tile-badge">Mobile-ready</span>
+                            </a>
+                        </div>
+
+                        <!-- ===== STEP 2B: Consignment Form ===== -->
+                        <div id="tcg_consignment_view" class="tcg-form-view">
+                            <button class="tcg-form-back" onclick="showSelector()">&#8592; Back</button>
+                            <h2 class="tcg-form-heading tcg-form-heading-consignment">Consignment Stock</h2>
+                            <p class="tcg-form-subtitle">Cards owned by a partner</p>
+
+                            <div class="tcg-dash-section">
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label">Partner (Owner) <span class="tcg-dash-required">*</span></label>
+                                    <div class="tcg-autocomplete" id="tcg_cons_partner_ac">
+                                        <input type="text" id="tcg_cons_partner_input" placeholder="Search partner..." autocomplete="off"/>
+                                        <div class="tcg-autocomplete-dropdown" id="tcg_cons_partner_dropdown"></div>
+                                    </div>
+                                    <div class="tcg-autocomplete-selected" id="tcg_cons_partner_selected">
+                                        <span id="tcg_cons_partner_selected_name"></span>
+                                        <span style="display:flex;gap:4px;align-items:center;">
+                                            <a id="tcg_cons_partner_edit_link" href="#" target="_blank" class="tcg-autocomplete-edit" style="display:none;">Edit</a>
+                                            <button class="tcg-autocomplete-clear" onclick="clearConsPartner()">&#10005;</button>
+                                        </span>
+                                    </div>
+                                    <input type="hidden" id="tcg_cons_partner_id" value=""/>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_cons_employee">Employee <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_cons_employee" class="tcg-dash-select">
+                                        <option value="">Select employee...</option>
+                                    </select>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_cons_categ">Category <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_cons_categ" class="tcg-dash-select">
+                                        <option value="">Choose a category...</option>
+                                        <t t-foreach="categories" t-as="cat">
+                                            <option t-att-value="cat['id']">
+                                                <t t-esc="cat['display_name']"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                </div>
+                                <div class="tcg-dash-row">
+                                    <label class="tcg-dash-label" for="tcg_cons_location">Stock Location <span class="tcg-dash-required">*</span></label>
+                                    <select id="tcg_cons_location" class="tcg-dash-select">
+                                        <option value="">Choose a stock location...</option>
+                                        <t t-foreach="locations" t-as="loc">
+                                            <option t-att-value="loc['id']">
+                                                <t t-esc="loc['display_name']"/>
+                                            </option>
+                                        </t>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <a id="tcg_consignment_tile" href="#" class="tcg-action-tile tcg-action-tile-consignment tcg-action-tile-disabled">
+                                <div class="tcg-action-tile-icon">&#x1F91D;</div>
+                                <div class="tcg-action-tile-title">Add Consignment Card</div>
+                                <div class="tcg-action-tile-desc">Create a product and receive it via consignment receipt. The owner retains ownership.</div>
+                                <span class="tcg-action-tile-badge">Owner-tracked</span>
+                            </a>
+
+                            <t t-if="not consignment_enabled">
+                                <div class="tcg-dash-warning">
+                                    &#x26A0; Consignment tracking is not enabled. Enable it in
+                                    Inventory &gt; Settings &gt; Consignment to use the consignment workflow.
+                                </div>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    var consignmentEnabled = <t t-out="'true' if consignment_enabled else 'false'"/>;
+                    var partnerActionId = <t t-out="partner_action_id"/>;
+
+                    function rpc(url, params) {
+                        return fetch(url, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({jsonrpc: '2.0', method: 'call', params: params, id: Date.now()}),
+                            credentials: 'same-origin',
+                        }).then(function(r) { return r.json(); }).then(function(d) { return d.result; });
+                    }
+
+                    function escapeHtml(text) {
+                        var div = document.createElement('div');
+                        div.appendChild(document.createTextNode(text));
+                        return div.innerHTML;
+                    }
+
+                    /* ===== View Navigation ===== */
+                    function showSelector() {
+                        document.getElementById('tcg_selector_view').style.display = '';
+                        document.getElementById('tcg_stock_view').classList.remove('active');
+                        document.getElementById('tcg_consignment_view').classList.remove('active');
+                        loadRecentAdditions();
+                    }
+
+                    function showStockForm() {
+                        document.getElementById('tcg_selector_view').style.display = 'none';
+                        document.getElementById('tcg_stock_view').classList.add('active');
+                        document.getElementById('tcg_consignment_view').classList.remove('active');
+                        loadEmployees();
+                        loadOpenPOs();
+                    }
+
+                    function showConsignmentForm() {
+                        document.getElementById('tcg_selector_view').style.display = 'none';
+                        document.getElementById('tcg_stock_view').classList.remove('active');
+                        document.getElementById('tcg_consignment_view').classList.add('active');
+                        loadEmployees();
+                    }
+
+                    /* ===== Load Employees ===== */
+                    function loadEmployees() {
+                        rpc('/tcg/aankoop/get_employees', {}).then(function(employees) {
+                            ['tcg_stock_employee', 'tcg_cons_employee'].forEach(function(selId) {
+                                var sel = document.getElementById(selId);
+                                var curVal = sel.value;
+                                sel.innerHTML = '';
+                                var defOpt = document.createElement('option');
+                                defOpt.value = '';
+                                defOpt.textContent = 'Select employee...';
+                                sel.appendChild(defOpt);
+                                (employees || []).forEach(function(e) {
+                                    var opt = document.createElement('option');
+                                    opt.value = e.id;
+                                    opt.textContent = e.name + (e.department_name ? ' - ' + e.department_name : '');
+                                    if (String(e.id) === curVal) opt.selected = true;
+                                    sel.appendChild(opt);
+                                });
+                            });
+                        });
+                    }
+
+                    /* ===== Load Open POs ===== */
+                    function loadOpenPOs() {
+                        rpc('/tcg/get_open_purchase_orders', {}).then(function(pos) {
+                            var sel = document.getElementById('tcg_stock_po');
+                            sel.innerHTML = '';
+                            var defOpt = document.createElement('option');
+                            defOpt.value = '';
+                            defOpt.textContent = 'No PO';
+                            sel.appendChild(defOpt);
+                            (pos || []).forEach(function(po) {
+                                var opt = document.createElement('option');
+                                opt.value = po.id;
+                                opt.textContent = po.name + ' \u2014 ' + po.partner_name + ' (' + po.remaining_qty + '/' + po.total_qty + ' remaining)';
+                                sel.appendChild(opt);
+                            });
+                            updateStockTile();
+                        });
+                    }
+
+                    /* ===== SuperTCG Stock Tile ===== */
+                    var stockCateg = document.getElementById('tcg_stock_categ');
+                    var stockLoc = document.getElementById('tcg_stock_location');
+                    var stockEmp = document.getElementById('tcg_stock_employee');
+                    var stockPo = document.getElementById('tcg_stock_po');
+                    var stockTile = document.getElementById('tcg_stock_tile');
+
+                    function updateStockTile() {
+                        var c = stockCateg.value;
+                        var l = stockLoc.value;
+                        var e = stockEmp.value;
+                        if (c &amp;&amp; l &amp;&amp; e) {
+                            stockTile.classList.remove('tcg-action-tile-disabled');
+                            var url = '/web#action=supertcg_products.action_tcg_card_form'
+                                + '&amp;categ_id=' + c
+                                + '&amp;location_id=' + l
+                                + '&amp;employee_id=' + e
+                                + '&amp;employee_name=' + encodeURIComponent(stockEmp.options[stockEmp.selectedIndex].text);
+                            var poVal = stockPo.value;
+                            if (poVal) {
+                                url += '&amp;po_id=' + poVal;
+                            }
+                            stockTile.href = url;
+                        } else {
+                            stockTile.classList.add('tcg-action-tile-disabled');
+                            stockTile.href = '#';
+                        }
+                    }
+                    stockCateg.addEventListener('change', updateStockTile);
+                    stockLoc.addEventListener('change', updateStockTile);
+                    stockEmp.addEventListener('change', updateStockTile);
+                    stockPo.addEventListener('change', updateStockTile);
+
+                    /* ===== Consignment Partner Autocomplete ===== */
+                    var consPartnerInput = document.getElementById('tcg_cons_partner_input');
+                    var consPartnerDropdown = document.getElementById('tcg_cons_partner_dropdown');
+                    var consPartnerIdField = document.getElementById('tcg_cons_partner_id');
+                    var consSearchTimer = null;
+                    var consActiveIndex = -1;
+                    var consAbortController = null;
+
+                    consPartnerInput.addEventListener('input', function() {
+                        var term = this.value.trim();
+                        if (consSearchTimer) clearTimeout(consSearchTimer);
+                        if (consAbortController) { try { consAbortController.abort(); } catch(e){} }
+                        if (term.length &lt; 2) { consPartnerDropdown.classList.remove('open'); return; }
+                        consSearchTimer = setTimeout(function() {
+                            consAbortController = new AbortController();
+                            fetch('/tcg/aankoop/search_partner', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({jsonrpc: '2.0', method: 'call', params: {term: term}, id: Date.now()}),
+                                credentials: 'same-origin',
+                                signal: consAbortController.signal,
+                            }).then(function(r) { return r.json(); }).then(function(d) {
+                                var results = d.result;
+                                consActiveIndex = -1;
+                                consPartnerDropdown.innerHTML = '';
+                                results.forEach(function(r) {
+                                    var div = document.createElement('div');
+                                    div.className = 'tcg-autocomplete-item';
+                                    div.setAttribute('data-id', r.id);
+                                    div.setAttribute('data-name', r.name);
+                                    div.textContent = r.name;
+                                    div.addEventListener('click', function() { selectConsPartner(r.id, r.name); });
+                                    consPartnerDropdown.appendChild(div);
+                                });
+                                var createDiv = document.createElement('div');
+                                createDiv.className = 'tcg-autocomplete-create';
+                                createDiv.textContent = 'Create new partner in Odoo \u2197';
+                                createDiv.addEventListener('click', function() {
+                                    window.open('/odoo/action-' + partnerActionId + '/new', '_blank');
+                                    consPartnerDropdown.classList.remove('open');
+                                });
+                                consPartnerDropdown.appendChild(createDiv);
+                                consPartnerDropdown.classList.add('open');
+                            }).catch(function(err) {
+                                if (err.name !== 'AbortError') {
+                                    consPartnerDropdown.classList.remove('open');
+                                }
+                            });
+                        }, 300);
+                    });
+
+                    consPartnerInput.addEventListener('keydown', function(ev) {
+                        var items = consPartnerDropdown.querySelectorAll('.tcg-autocomplete-item');
+                        if (ev.key === 'ArrowDown') { ev.preventDefault(); consActiveIndex = Math.min(consActiveIndex + 1, items.length - 1); highlightConsItems(items); }
+                        else if (ev.key === 'ArrowUp') { ev.preventDefault(); consActiveIndex = Math.max(consActiveIndex - 1, 0); highlightConsItems(items); }
+                        else if (ev.key === 'Enter' &amp;&amp; consActiveIndex >= 0 &amp;&amp; items[consActiveIndex]) { ev.preventDefault(); items[consActiveIndex].click(); }
+                        else if (ev.key === 'Escape') { consPartnerDropdown.classList.remove('open'); }
+                    });
+
+                    function highlightConsItems(items) {
+                        items.forEach(function(it, i) { it.classList.toggle('active', i === consActiveIndex); });
+                    }
+
+                    function selectConsPartner(id, name) {
+                        consPartnerIdField.value = id;
+                        consPartnerInput.value = '';
+                        consPartnerInput.style.display = 'none';
+                        consPartnerDropdown.classList.remove('open');
+                        document.getElementById('tcg_cons_partner_selected_name').textContent = name;
+                        document.getElementById('tcg_cons_partner_selected').classList.add('show');
+                        var editLink = document.getElementById('tcg_cons_partner_edit_link');
+                        editLink.href = '/odoo/action-' + partnerActionId + '/' + id;
+                        editLink.style.display = 'inline';
+                        updateConsignmentTile();
+                    }
+
+                    function clearConsPartner() {
+                        consPartnerIdField.value = '';
+                        document.getElementById('tcg_cons_partner_selected').classList.remove('show');
+                        document.getElementById('tcg_cons_partner_edit_link').style.display = 'none';
+                        consPartnerInput.style.display = '';
+                        consPartnerInput.value = '';
+                        consPartnerInput.focus();
+                        updateConsignmentTile();
+                    }
+
+                    document.addEventListener('click', function(ev) {
+                        if (!document.getElementById('tcg_cons_partner_ac').contains(ev.target)) {
+                            consPartnerDropdown.classList.remove('open');
+                        }
+                    });
+
+                    /* ===== Consignment Tile ===== */
+                    var consCateg = document.getElementById('tcg_cons_categ');
+                    var consLoc = document.getElementById('tcg_cons_location');
+                    var consEmp = document.getElementById('tcg_cons_employee');
+                    var consTile = document.getElementById('tcg_consignment_tile');
+
+                    function updateConsignmentTile() {
+                        if (!consignmentEnabled) {
+                            consTile.classList.add('tcg-action-tile-disabled');
+                            consTile.href = '#';
+                            return;
+                        }
+                        var c = consCateg.value;
+                        var l = consLoc.value;
+                        var p = consPartnerIdField.value;
+                        var e = consEmp.value;
+                        if (c &amp;&amp; l &amp;&amp; p &amp;&amp; e) {
+                            consTile.classList.remove('tcg-action-tile-disabled');
+                            consTile.href = '/web#action=supertcg_products.action_tcg_card_form'
+                                + '&amp;categ_id=' + c
+                                + '&amp;location_id=' + l
+                                + '&amp;consignment_mode=1'
+                                + '&amp;consignment_partner_id=' + p
+                                + '&amp;consignment_partner_name=' + encodeURIComponent(document.getElementById('tcg_cons_partner_selected_name').textContent)
+                                + '&amp;employee_id=' + e
+                                + '&amp;employee_name=' + encodeURIComponent(consEmp.options[consEmp.selectedIndex].text);
+                        } else {
+                            consTile.classList.add('tcg-action-tile-disabled');
+                            consTile.href = '#';
+                        }
+                    }
+                    consCateg.addEventListener('change', updateConsignmentTile);
+                    consLoc.addEventListener('change', updateConsignmentTile);
+                    consEmp.addEventListener('change', updateConsignmentTile);
+
+                    /* ===== Recent Additions Log ===== */
+                    var logCurrentPage = 1;
+                    var logPageSize = 20;
+
+                    function renderLogPagination(page, pageCount, total) {
+                        var container = document.getElementById('tcg_log_pagination');
+                        container.innerHTML = '';
+                        if (pageCount == 1) return;
+                        var prevBtn = document.createElement('button');
+                        prevBtn.className = 'tcg-log-page-btn';
+                        prevBtn.textContent = 'Prev';
+                        prevBtn.disabled = page == 1;
+                        prevBtn.onclick = function() { loadRecentAdditions(page - 1); };
+                        container.appendChild(prevBtn);
+                        var info = document.createElement('span');
+                        info.className = 'tcg-page-info';
+                        info.textContent = 'Page ' + page + ' of ' + pageCount + ' (' + total + ' items)';
+                        container.appendChild(info);
+                        var nextBtn = document.createElement('button');
+                        nextBtn.className = 'tcg-log-page-btn';
+                        nextBtn.textContent = 'Next';
+                        nextBtn.disabled = page >= pageCount;
+                        nextBtn.onclick = function() { loadRecentAdditions(page + 1); };
+                        container.appendChild(nextBtn);
+                    }
+
+                    function loadRecentAdditions(page) {
+                        page = page || 1;
+                        logCurrentPage = page;
+                        rpc('/tcg/get_recent_additions', {page: page, limit: logPageSize}).then(function(data) {
+                            var section = document.getElementById('tcg_log_section');
+                            var list = document.getElementById('tcg_log_list');
+                            var results = data.entries || [];
+                            if (!results || results.length === 0) { section.style.display = 'none'; return; }
+                            section.style.display = 'block';
+                            list.innerHTML = '';
+                            results.forEach(function(r) {
+                                var row = document.createElement('div');
+                                row.className = 'tcg-log-item';
+                                var badgesWrap = document.createElement('div');
+                                badgesWrap.className = 'tcg-log-badges';
+                                if (r.has_stock &amp;&amp; r.stock_url) {
+                                    var stockBadge = document.createElement('a');
+                                    stockBadge.href = r.stock_url;
+                                    stockBadge.target = '_blank';
+                                    stockBadge.className = 'tcg-log-badge stock';
+                                    stockBadge.textContent = 'Stock';
+                                    badgesWrap.appendChild(stockBadge);
+                                }
+                                if (r.has_consignment &amp;&amp; r.consignment_url) {
+                                    var consBadge = document.createElement('a');
+                                    consBadge.href = r.consignment_url;
+                                    consBadge.target = '_blank';
+                                    consBadge.className = 'tcg-log-badge consignment';
+                                    consBadge.textContent = 'Consignment';
+                                    badgesWrap.appendChild(consBadge);
+                                }
+                                row.appendChild(badgesWrap);
+                                var info = document.createElement('div');
+                                info.className = 'tcg-log-info';
+                                var nameEl = document.createElement('div');
+                                nameEl.className = 'tcg-log-name';
+                                nameEl.textContent = r.name;
+                                info.appendChild(nameEl);
+                                var details = [];
+                                if (r.employee_name) details.push(r.employee_name);
+                                if (r.category) details.push(r.category);
+                                if (r.price > 0) details.push('€ ' + r.price.toFixed(2));
+                                if (r.partner_name) details.push(r.partner_name);
+                                var detailEl = document.createElement('div');
+                                detailEl.className = 'tcg-log-detail';
+                                detailEl.textContent = details.join(' • ');
+                                info.appendChild(detailEl);
+                                var dateEl = document.createElement('div');
+                                dateEl.className = 'tcg-log-date';
+                                dateEl.textContent = r.date ? r.date.substring(0, 16).replace('T', ' ') : '';
+                                info.appendChild(dateEl);
+                                row.appendChild(info);
+                                list.appendChild(row);
+                            });
+                            renderLogPagination(data.page, data.page_count, data.total);
+                        });
+                    }
+
+                    var initialMode = "<t t-out="initial_mode or ''"/>";
+                    if (initialMode === 'stock') {
+                        showStockForm();
+                    } else if (initialMode === 'consignment') {
+                        showConsignmentForm();
+                    } else {
+                        loadRecentAdditions();
+                    }
+                </script>
+            </t>
+        </t>
+    </template>
+
+</odoo>

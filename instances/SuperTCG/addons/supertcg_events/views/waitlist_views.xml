@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- Action: Waitlist Entries -->
+        <record id="action_event_waitlist" model="ir.actions.act_window">
+            <field name="name">Wachtlijst</field>
+            <field name="res_model">event.waitlist</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[]</field>
+            <field name="context">{} </field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Geen wachtlijst inschrijvingen gevonden.
+                </p>
+                <p>
+                    Wachtlijst inschrijvingen verschijnen hier wanneer bezoekers zich inschrijven voor volgeboekte evenementen.
+                </p>
+            </field>
+        </record>
+
+        <!-- Action: Waitlist per Event -->
+        <record id="action_event_waitlist_per_event" model="ir.actions.act_window">
+            <field name="name">Wachtlijst</field>
+            <field name="res_model">event.waitlist</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('event_id', '=', active_id)]</field>
+            <field name="context">{'default_event_id': active_id}</field>
+        </record>
+
+        <!-- List View -->
+        <record id="view_event_waitlist_list" model="ir.ui.view">
+            <field name="name">event.waitlist.list</field>
+            <field name="model">event.waitlist</field>
+            <field name="arch" type="xml">
+                <list string="Wachtlijst" decoration-muted="state=='cancelled'" decoration-success="state=='registered'" decoration-warning="state=='waiting'" decoration-info="state=='notified'">
+                    <field name="create_date" string="Ingeschreven op"/>
+                    <field name="event_id"/>
+                    <field name="name"/>
+                    <field name="email"/>
+                    <field name="phone"/>
+                    <field name="state" widget="badge" decoration-muted="state=='cancelled'" decoration-success="state=='registered'" decoration-warning="state=='waiting'" decoration-info="state=='notified'"/>
+                    <field name="notified_date" optional="hide"/>
+                    <field name="notes" optional="hide"/>
+                    <button name="action_register_attendee" type="object" string="Registreer" class="btn btn-primary" icon="fa-user-plus" invisible="state == 'registered'"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Form View -->
+        <record id="view_event_waitlist_form" model="ir.ui.view">
+            <field name="name">event.waitlist.form</field>
+            <field name="model">event.waitlist</field>
+            <field name="arch" type="xml">
+                <form string="Wachtlijst Inschrijving">
+                    <header>
+                        <button name="action_register_attendee" type="object" string="Registreer als deelnemer" class="oe_highlight" invisible="state == 'registered'"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                        </div>
+                        <group>
+                            <group>
+                                <field name="event_id"/>
+                                <field name="name"/>
+                                <field name="email"/>
+                                <field name="phone"/>
+                            </group>
+                            <group>
+                                <field name="state" widget="statusbar" options="{'clickable': '1'}"/>
+                                <field name="create_date" string="Ingeschreven op" readonly="1"/>
+                                <field name="notified_date" readonly="1"/>
+                            </group>
+                        </group>
+                        <group string="Notities">
+                            <field name="notes" nolabel="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View -->
+        <record id="view_event_waitlist_search" model="ir.ui.view">
+            <field name="name">event.waitlist.search</field>
+            <field name="model">event.waitlist</field>
+            <field name="arch" type="xml">
+                <search string="Zoek Wachtlijst">
+                    <field name="name"/>
+                    <field name="email"/>
+                    <field name="event_id"/>
+                    <filter name="waiting" string="Wachtend" domain="[('state', '=', 'waiting')]"/>
+                    <filter name="notified" string="Gecontacteerd" domain="[('state', '=', 'notified')]"/>
+                    <filter name="registered" string="Geregistreerd" domain="[('state', '=', 'registered')]"/>
+                    <filter name="cancelled" string="Geannuleerd" domain="[('state', '=', 'cancelled')]"/>
+                    <group expand="0" string="Groeperen">
+                        <filter name="group_by_event" string="Evenement" context="{'group_by': 'event_id'}"/>
+                        <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                        <filter name="group_by_date" string="Datum" context="{'group_by': 'create_date:day'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Menu Items -->
+        <menuitem id="menu_event_waitlist_root" name="Wachtlijst" parent="event.event_main_menu" action="action_event_waitlist" sequence="50"/>
+    </data>
+</odoo>

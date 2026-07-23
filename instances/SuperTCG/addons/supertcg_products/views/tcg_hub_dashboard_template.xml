@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="tcg_hub_dashboard" name="SuperTCG Hub">
+        <t t-call="web.html_container">
+            <t t-call="web.layout">
+                <t t-set="head">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+                    <style>
+                        body, #wrapwrap, .oe_structure, main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }
+                        * { box-sizing: border-box; }
+                        body { margin: 0; padding: 0; background: #f5f5f5; -webkit-font-smoothing: antialiased; }
+                        .tcg-hub { width: 100%; max-width: 600px; margin: 0 auto; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+                        .tcg-hub-header { display: flex; align-items: center; padding: 12px 16px; background: #714B67; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .tcg-hub-header-back { color: white; text-decoration: none; font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+                        .tcg-hub-header img { height: 28px; margin-right: 10px; }
+                        .tcg-hub-header-title { flex: 1; font-size: 18px; font-weight: 600; }
+                        .tcg-hub-body { padding: 16px; }
+
+                        .tcg-hub-section { margin-bottom: 24px; }
+                        .tcg-hub-section-title { font-size: 14px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-left: 4px; }
+
+                        .tcg-hub-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: white; border-radius: 12px; border: 1px solid #e5e5e5; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 10px; text-decoration: none; color: inherit; transition: all 0.2s; cursor: pointer; }
+                        .tcg-hub-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: translateY(-1px); }
+                        .tcg-hub-card:active { transform: scale(0.98); }
+                        .tcg-hub-card-icon { font-size: 28px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: #f8f5f7; border-radius: 12px; flex-shrink: 0; }
+                        .tcg-hub-card-icon.purple { background: #f3eef2; }
+                        .tcg-hub-card-icon.green { background: #f0f5f0; }
+                        .tcg-hub-card-icon.blue { background: #eef4fb; }
+                        .tcg-hub-card-icon.orange { background: #fdf5f0; }
+                        .tcg-hub-card-icon.gray { background: #f5f5f5; }
+                        .tcg-hub-card-content { flex: 1; min-width: 0; }
+                        .tcg-hub-card-title { font-size: 15px; font-weight: 600; color: #333; margin-bottom: 2px; }
+                        .tcg-hub-card-desc { font-size: 12px; color: #888; }
+                        .tcg-hub-card-arrow { color: #ccc; font-size: 18px; }
+
+                        .tcg-hub-log { margin-top: 24px; padding-top: 16px; border-top: 1px solid #ddd; }
+                        .tcg-hub-log-title { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 10px; }
+                        .tcg-hub-log-empty { text-align: center; padding: 24px; color: #999; font-size: 13px; }
+
+                        @media (max-width: 600px) {
+                            .tcg-hub { max-width: 100%; }
+                            .tcg-hub-body { padding: 12px; }
+                            .tcg-hub-card { padding: 14px; }
+                        }
+                    </style>
+                </t>
+
+                <div class="tcg-hub">
+                    <div class="tcg-hub-header">
+                        <a href="/odoo" class="tcg-hub-header-back">&#8592;</a>
+                        <img src="/supertcg_products/static/src/img/header_logo.png" alt="SuperTCG"/>
+                        <div class="tcg-hub-header-title">SuperTCG</div>
+                    </div>
+
+                    <div class="tcg-hub-body">
+                        <!-- 2dehands Aankopen -->
+                        <div class="tcg-hub-section">
+                            <div class="tcg-hub-section-title">2dehands Aankopen</div>
+                            <a href="/tcg/aankoop" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon purple">&#128176;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">Aankoop met Cash, Store Credit of Wire Transfer</div>
+                                    <div class="tcg-hub-card-desc">Buy-in van losse kaarten</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                        </div>
+
+                        <!-- Stock Toevoegen -->
+                        <div class="tcg-hub-section">
+                            <div class="tcg-hub-section-title">Stock Toevoegen</div>
+                            <a href="/tcg?mode=stock" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon purple">&#127183;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">Losse kaarten toevoegen (Eigen Stock)</div>
+                                    <div class="tcg-hub-card-desc">Voeg eigen stock kaarten toe</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                            <a href="/tcg?mode=consignment" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon green">&#129309;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">Losse kaarten toevoegen (Consignatie)</div>
+                                    <div class="tcg-hub-card-desc">Ontvang consignatie kaarten van een partner</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                        </div>
+
+                        <!-- Consignatie Samenvatting -->
+                        <div class="tcg-hub-section">
+                            <div class="tcg-hub-section-title">Consignatie Samenvatting &amp; Afrekening</div>
+                            <a href="/tcg/consignment" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon green">&#128200;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">Consignatie Overzicht</div>
+                                    <div class="tcg-hub-card-desc">Bekijk stock en maak afrekeningen</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                        </div>
+
+                        <!-- Marge Analyse -->
+                        <div class="tcg-hub-section">
+                            <div class="tcg-hub-section-title">Marge Analyse</div>
+                            <a href="/tcg/margin" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon orange">&#128202;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">Marge Analyse Dashboard</div>
+                                    <div class="tcg-hub-card-desc">Bekijk marges, kosten en verkoopprijzen</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                        </div>
+
+                        <!-- Work in Progress -->
+                        <div class="tcg-hub-section">
+                            <div class="tcg-hub-section-title">Work in Progress</div>
+                            <a href="/tcg/ocr" class="tcg-hub-card">
+                                <div class="tcg-hub-card-icon gray">&#128247;</div>
+                                <div class="tcg-hub-card-content">
+                                    <div class="tcg-hub-card-title">OCR BETA</div>
+                                    <div class="tcg-hub-card-desc">Automatische kaart herkenning via camera</div>
+                                </div>
+                                <div class="tcg-hub-card-arrow">&#8250;</div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+
+</odoo>

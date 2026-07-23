@@ -1,0 +1,14 @@
+# Targets must be reachable from the odoo-proxy Docker network. Add LAN or
+# container URLs here rather than assuming public DNS is available.
+- targets:
+    - "http://odoo-supertcg:8069/web/login"
+  labels:
+    environment: "development"
+    owner: "kimkom"
+
+- targets:
+    - "http://odoo-kimkom-dev:8069/web/login"
+  labels:
+    client: "kimkom-dev"
+    environment: "development"
+    owner: "kimkom"

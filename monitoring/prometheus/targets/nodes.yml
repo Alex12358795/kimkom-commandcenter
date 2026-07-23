@@ -1,0 +1,6 @@
+- targets:
+    - "100.114.91.105:9100"
+  labels:
+    client: "kimkom-prod"
+    environment: "pilot"
+    transport: "tailscale"

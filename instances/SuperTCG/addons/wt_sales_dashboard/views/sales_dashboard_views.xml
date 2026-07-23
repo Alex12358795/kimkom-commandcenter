@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_sales_dashboard" model="ir.actions.client">
+        <field name="name">Sales &amp; Inventory Dashboard</field>
+        <field name="tag">wt_sales_dashboard.dashboard</field>
+    </record>
+
+    <menuitem id="menu_sales_dashboard_root"
+              name="Dashboard"
+              sequence="0"
+              web_icon="wt_sales_dashboard,static/description/icon.png"/>
+
+    <menuitem id="menu_sales_dashboard_main"
+              name="Sales Dashboard"
+              parent="menu_sales_dashboard_root"
+              action="action_sales_dashboard"
+              sequence="1"/>
+</odoo>

@@ -1,0 +1,476 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- Buylist Report — Editorial Luxury Aesthetic                   -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <template id="report_buylist_document">
+        <t t-call="web.external_layout">
+            <t t-set="doc" t-value="doc.with_context(lang=doc.env.user.lang)"/>
+            <t t-set="company" t-value="doc.company_id"/>
+            <t t-set="currency" t-value="company.currency_id"/>
+            <t t-set="included" t-value="doc.card_line_ids.filtered(lambda c: c.is_included)"/>
+
+            <div class="bl-page">
+
+                <!-- ═══ TITLE HEADER ═══ -->
+                <div class="bl-title-header">
+                    <div class="bl-doc-label">BUYLIST OFFER</div>
+                    <div class="bl-doc-ref" t-esc="doc.batch_id"/>
+                </div>
+
+                <!-- ═══ META STRIP ═══ -->
+                <table class="bl-meta-table">
+                    <tr>
+                        <td class="bl-meta-cell">
+                            <span class="bl-meta-key">Date</span>
+                            <span class="bl-meta-val" t-esc="doc.scanned_at" t-options='{"widget": "datetime"}'/>
+                        </td>
+                        <td class="bl-meta-cell bl-meta-center">
+                            <span class="bl-meta-key">Cards</span>
+                            <span class="bl-meta-val" t-esc="doc.included_card_count"/>
+                        </td>
+                        <td class="bl-meta-cell bl-meta-center">
+                            <span class="bl-meta-key">Device</span>
+                            <span class="bl-meta-val" t-esc="doc.device_id or '—'"/>
+                        </td>
+                        <td class="bl-meta-cell bl-meta-right">
+                            <span class="bl-meta-key">Batch</span>
+                            <span class="bl-meta-val" t-esc="doc.batch_name"/>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- ═══ CARD LISTING ═══ -->
+                <t t-if="included">
+                    <t t-foreach="included" t-as="card">
+                        <div class="bl-card-row">
+                            <table class="bl-card-table">
+                                <tr>
+                                    <!-- Image -->
+                                    <td class="bl-card-image-td">
+                                        <t t-if="card.image_base64">
+                                            <img t-att-src="image_data_uri(card.image_base64)" class="bl-card-img"/>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="bl-card-img-placeholder">
+                                                <span>NO IMAGE</span>
+                                            </div>
+                                        </t>
+                                    </td>
+
+                                    <!-- Info -->
+                                    <td class="bl-card-info-td">
+                                        <div class="bl-card-name" t-esc="card.card_name"/>
+                                        <div class="bl-card-meta">
+                                            <span class="bl-card-set" t-esc="card.set_name or card.set_code or 'Unknown Set'"/>
+                                            <span class="bl-card-sep">|</span>
+                                            <span class="bl-card-num" t-esc="card.card_number or '—'"/>
+                                            <span class="bl-card-sep">|</span>
+                                            <span class="bl-card-lang" t-esc="card.language or 'EN'"/>
+                                        </div>
+                                        <div class="bl-card-tags">
+                                            <span t-attf-class="bl-tag {{'bl-tag-nm' if card.remark == 'NM' else ('bl-tag-lp' if card.remark == 'LP' else ('bl-tag-mp' if card.remark == 'MP' else ('bl-tag-hp' if card.remark == 'HP' else 'bl-tag-dmg')))}}">
+                                                <t t-esc="card.remark or 'UNGRADED'"/>
+                                            </span>
+                                            <span t-if="card.foil" class="bl-tag bl-tag-foil">FOIL</span>
+                                            <span t-if="card.is_reverse_holo" class="bl-tag bl-tag-reverse">REVERSE HOLO</span>
+                                            <span t-if="card.rarity" class="bl-tag bl-tag-rarity" t-esc="card.rarity"/>
+                                        </div>
+                                    </td>
+
+                                    <!-- Pricing -->
+                                    <td class="bl-card-price-td">
+                                        <div class="bl-price-market">
+                                            <span class="bl-price-label">Market</span>
+                                            <span class="bl-price-value" t-esc="card.price_market" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                        </div>
+                                        <div class="bl-price-offer">
+                                            <span class="bl-price-label">Cash / Wire</span>
+                                            <span class="bl-price-value" t-esc="card.purchase_price" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                        </div>
+                                        <div class="bl-price-offer">
+                                            <span class="bl-price-label">Store Credit</span>
+                                            <span class="bl-price-value" t-esc="card.credit_purchase_price" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </t>
+                </t>
+
+                <!-- ═══ EMPTY STATE ═══ -->
+                <t t-if="not included">
+                    <div class="bl-empty">
+                        <div class="bl-empty-icon">◈</div>
+                        <div class="bl-empty-text">No cards are included in this buylist.</div>
+                    </div>
+                </t>
+
+                <!-- ═══ TOTALS ═══ -->
+                <t t-if="included">
+                    <div class="bl-totals">
+                        <table class="bl-totals-table">
+                            <tr class="bl-totals-row">
+                                <td class="bl-totals-label">Total Cards</td>
+                                <td class="bl-totals-val" t-esc="doc.included_card_count"/>
+                            </tr>
+                            <tr class="bl-totals-row">
+                                <td class="bl-totals-label">Total Market Value</td>
+                                <td class="bl-totals-val bl-totals-muted">
+                                    <span t-esc="doc.total_market_price" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                </td>
+                            </tr>
+                            <tr class="bl-totals-row">
+                                <td class="bl-totals-label">Total Cash / Wire Transfer</td>
+                                <td class="bl-totals-val bl-totals-gold">
+                                    <span t-esc="doc.total_purchase_price" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                </td>
+                            </tr>
+                            <tr class="bl-totals-row bl-totals-final">
+                                <td class="bl-totals-label">Total Store Credit</td>
+                                <td class="bl-totals-val bl-totals-gold">
+                                    <span t-esc="doc.total_credit_purchase_price" t-options='{"widget": "monetary", "display_currency": currency}'/>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
+
+
+
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- STYLES — wkhtmltopdf-safe                                       -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <style>
+                /* ─── Base ─── */
+                .bl-page {
+                    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                    color: #1e293b;
+                    font-size: 10px;
+                    line-height: 1.45;
+                    padding: 0;
+                    margin: 0;
+                }
+
+                /* ─── Header ─── */
+                .bl-header {
+                    background: #0f172a;
+                    padding: 28px 32px 24px 32px;
+                    margin: -15px -15px 0 -15px;
+                }
+                .bl-header-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .bl-header-left {
+                    width: 50%;
+                    vertical-align: middle;
+                }
+                .bl-header-right {
+                    width: 50%;
+                    vertical-align: middle;
+                    text-align: right;
+                }
+                .bl-logo {
+                    max-height: 48px;
+                    max-width: 160px;
+                    filter: brightness(0) invert(1);
+                }
+                .bl-logo-fallback {
+                    font-family: Georgia, "Times New Roman", serif;
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: #f8fafc;
+                    letter-spacing: -0.3px;
+                }
+                .bl-title-header {
+                    padding: 20px 32px;
+                    margin: 0 -15px 20px -15px;
+                    background: #0f172a;
+                }
+                .bl-doc-label {
+                    font-family: Georgia, "Times New Roman", serif;
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #f8fafc;
+                    letter-spacing: 2px;
+                    text-transform: uppercase;
+                }
+                .bl-doc-ref {
+                    font-family: "Courier New", monospace;
+                    font-size: 9px;
+                    color: #94a3b8;
+                    margin-top: 6px;
+                    letter-spacing: 0.5px;
+                }
+
+                /* ─── Meta Strip ─── */
+                .bl-meta-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: #f8fafc;
+                    border-bottom: 1px solid #e2e8f0;
+                    margin-bottom: 24px;
+                }
+                .bl-meta-cell {
+                    padding: 14px 32px;
+                    border-right: 1px solid #e2e8f0;
+                }
+                .bl-meta-cell:last-child {
+                    border-right: none;
+                }
+                .bl-meta-center {
+                    text-align: center;
+                }
+                .bl-meta-right {
+                    text-align: right;
+                }
+                .bl-meta-key {
+                    display: block;
+                    font-size: 7px;
+                    color: #64748b;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    font-weight: 700;
+                    margin-bottom: 3px;
+                }
+                .bl-meta-val {
+                    font-size: 11px;
+                    color: #0f172a;
+                    font-weight: 600;
+                }
+
+                /* ─── Card Row ─── */
+                .bl-card-row {
+                    page-break-inside: avoid;
+                    margin-bottom: 16px;
+                    padding: 0 32px;
+                }
+                .bl-card-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    border-bottom: 1px solid #e2e8f0;
+                    padding-bottom: 16px;
+                }
+                .bl-card-image-td {
+                    width: 80px;
+                    vertical-align: top;
+                    padding: 0 16px 0 0;
+                }
+                .bl-card-img {
+                    max-width: 90px;
+                    height: auto;
+                    display: block;
+                }
+                .bl-card-img-placeholder {
+                    width: 90px;
+                    height: 120px;
+                    line-height: 120px;
+                    text-align: center;
+                    color: #cbd5e1;
+                    font-size: 8px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                }
+                .bl-card-info-td {
+                    vertical-align: top;
+                    padding: 4px 0;
+                }
+                .bl-card-name {
+                    font-family: Georgia, "Times New Roman", serif;
+                    font-size: 15px;
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin-bottom: 6px;
+                    letter-spacing: -0.2px;
+                }
+                .bl-card-meta {
+                    font-size: 9px;
+                    color: #64748b;
+                    margin-bottom: 10px;
+                    font-weight: 500;
+                }
+                .bl-card-sep {
+                    color: #cbd5e1;
+                    margin: 0 6px;
+                }
+                .bl-card-tags {
+                    font-size: 0;
+                }
+                .bl-tag {
+                    display: inline-block;
+                    padding: 3px 10px;
+                    border-radius: 3px;
+                    font-size: 8px;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-right: 6px;
+                    margin-bottom: 4px;
+                }
+                .bl-tag-nm { background: #dcfce7; color: #166534; }
+                .bl-tag-lp { background: #fef9c3; color: #854d0e; }
+                .bl-tag-mp { background: #ffedd5; color: #9a3412; }
+                .bl-tag-hp { background: #fee2e2; color: #991b1b; }
+                .bl-tag-dmg { background: #fee2e2; color: #991b1b; border: 1px dashed #991b1b; }
+                .bl-tag-foil { background: #0f172a; color: #fbbf24; }
+                .bl-tag-reverse { background: #1e293b; color: #38bdf8; }
+                .bl-tag-rarity { background: #f1f5f9; color: #475569; }
+
+                /* ─── Pricing Column ─── */
+                .bl-card-price-td {
+                    width: 140px;
+                    vertical-align: top;
+                    text-align: right;
+                    padding: 4px 0 0 16px;
+                }
+                .bl-price-market {
+                    margin-bottom: 10px;
+                }
+                .bl-price-offer {
+                    padding-top: 8px;
+                    border-top: 1px solid #e2e8f0;
+                }
+                .bl-price-label {
+                    display: block;
+                    font-size: 7px;
+                    color: #94a3b8;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    font-weight: 700;
+                    margin-bottom: 3px;
+                }
+                .bl-price-market .bl-price-value {
+                    font-size: 11px;
+                    color: #64748b;
+                    font-weight: 500;
+                }
+                .bl-price-offer .bl-price-value {
+                    font-size: 18px;
+                    color: #16a34a;
+                    font-weight: 800;
+                    font-family: Georgia, "Times New Roman", serif;
+                }
+
+                /* ─── Empty State ─── */
+                .bl-empty {
+                    text-align: center;
+                    padding: 80px 32px;
+                }
+                .bl-empty-icon {
+                    font-size: 32px;
+                    color: #cbd5e1;
+                    margin-bottom: 12px;
+                }
+                .bl-empty-text {
+                    font-size: 12px;
+                    color: #94a3b8;
+                    font-weight: 500;
+                }
+
+                /* ─── Totals ─── */
+                .bl-totals {
+                    margin: 32px 32px 24px 32px;
+                    padding: 24px 28px;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                }
+                .bl-totals-table {
+                    width: 100%;
+                    max-width: 320px;
+                    margin-left: auto;
+                    border-collapse: collapse;
+                }
+                .bl-totals-row td {
+                    padding: 8px 0;
+                }
+                .bl-totals-label {
+                    font-size: 10px;
+                    color: #64748b;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .bl-totals-val {
+                    text-align: right;
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: #0f172a;
+                }
+                .bl-totals-muted {
+                    color: #94a3b8;
+                }
+                .bl-totals-final td {
+                    padding-top: 14px;
+                    border-top: 2px solid #16a34a;
+                }
+                .bl-totals-gold {
+                    color: #16a34a;
+                    font-size: 20px;
+                    font-family: Georgia, "Times New Roman", serif;
+                    font-weight: 800;
+                }
+
+                /* ─── Terms ─── */
+                .bl-terms {
+                    margin: 0 32px 28px 32px;
+                    padding: 16px 20px;
+                    background: #f8fafc;
+                    border-left: 3px solid #b45309;
+                }
+                .bl-terms p {
+                    margin: 0;
+                    font-size: 8px;
+                    color: #64748b;
+                    line-height: 1.6;
+                }
+
+                /* ─── Signature ─── */
+                .bl-sig-table {
+                    width: 100%;
+                    margin: 0 32px 32px 32px;
+                    border-collapse: collapse;
+                }
+                .bl-sig-cell {
+                    width: 42%;
+                    vertical-align: bottom;
+                }
+                .bl-sig-spacer {
+                    width: 16%;
+                }
+                .bl-sig-label {
+                    font-size: 8px;
+                    color: #64748b;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                    letter-spacing: 1.5px;
+                    margin-bottom: 10px;
+                }
+                .bl-sig-line {
+                    border-bottom: 1px solid #1e293b;
+                    height: 40px;
+                    margin-bottom: 8px;
+                }
+                .bl-sig-note {
+                    font-size: 8px;
+                    color: #94a3b8;
+                }
+            </style>
+        </t>
+    </template>
+
+    <!-- Wrapper for multi-record rendering -->
+    <template id="report_buylist">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="doc">
+                <t t-call="supertcg_scanner.report_buylist_document"/>
+            </t>
+        </t>
+    </template>
+
+</odoo>

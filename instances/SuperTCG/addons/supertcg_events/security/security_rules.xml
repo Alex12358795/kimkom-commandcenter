@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Record Rule: Public users can only see waitlist entries they created (by email match) -->
+        <record id="rule_event_waitlist_public" model="ir.rule">
+            <field name="name">Event Waitlist: Public users see own entries only</field>
+            <field name="model_id" ref="model_event_waitlist"/>
+            <field name="domain_force">[('email', '=', user.email)]</field>
+            <field name="groups" eval="[(4, ref('base.group_public'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- Record Rule: Portal users can only see waitlist entries they created (by email match) -->
+        <record id="rule_event_waitlist_portal" model="ir.rule">
+            <field name="name">Event Waitlist: Portal users see own entries only</field>
+            <field name="model_id" ref="model_event_waitlist"/>
+            <field name="domain_force">[('email', '=', user.email)]</field>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- Record Rule: Event users can see all waitlist entries for events they organize -->
+        <record id="rule_event_waitlist_user" model="ir.rule">
+            <field name="name">Event Waitlist: Users see all entries</field>
+            <field name="model_id" ref="model_event_waitlist"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('event.group_event_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+    </data>
+</odoo>

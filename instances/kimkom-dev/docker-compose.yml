@@ -1,0 +1,49 @@
+services:
+  odoo:
+    build: .
+    container_name: odoo-kimkom-dev
+    restart: unless-stopped
+    expose:
+      - 8069
+      - 8072
+    volumes:
+      - ./config/odoo.conf:/etc/odoo/odoo.conf:ro
+      - ./addons:/mnt/extra-addons
+      - ./addons-enterprise:/mnt/extra-enterprise
+      - ./addons-oca:/mnt/extra-oca
+      - ./data:/var/lib/odoo/data
+    environment:
+      DB_HOST: odoo-postgres
+      DB_PORT: 5432
+      DB_USER: odoo_kimkom_dev
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: odoo_kimkom_dev
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8069/web/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.kimkom-dev.rule=Host(`kimkom-dev.kimkom.net`)
+      - traefik.http.routers.kimkom-dev.entrypoints=http
+      - traefik.http.routers.kimkom-dev.service=kimkom-dev
+      - "traefik.http.routers.kimkom-dev.middlewares=login-rate-limit@file"
+      - traefik.http.services.kimkom-dev.loadbalancer.server.port=8069
+      - "traefik.http.routers.kimkom-dev-websocket.rule=Host(`kimkom-dev.kimkom.net`) && PathPrefix(`/websocket`)"
+      - traefik.http.routers.kimkom-dev-websocket.entrypoints=http
+      - traefik.http.routers.kimkom-dev-websocket.priority=100
+      - traefik.http.routers.kimkom-dev-websocket.service=kimkom-dev-websocket
+      - traefik.http.services.kimkom-dev-websocket.loadbalancer.server.port=8072
+    networks:
+      - odoo-proxy
+
+networks:
+  odoo-proxy:
+    name: odoo-proxy
+    external: true

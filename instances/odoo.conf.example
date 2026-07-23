@@ -1,0 +1,24 @@
+[options]
+admin_passwd = __ODOO_ADMIN_PASSWORD__
+db_host = odoo-postgres
+db_port = 5432
+db_user = odoo_<client_slug>
+db_password = __DB_PASSWORD__
+db_name = odoo_<client_slug>
+dbfilter = ^odoo_<client_slug>$
+list_db = False
+addons_path = /mnt/extra-addons,/mnt/extra-enterprise,/mnt/extra-oca,/usr/lib/python3/dist-packages/odoo/addons
+data_dir = /var/lib/odoo/data
+proxy_mode = True
+workers = 4
+limit_memory_soft = 536870912
+limit_memory_hard = 1073741824
+limit_time_cpu = 60
+limit_time_real = 120
+max_cron_threads = 1
+log_level = info
+log_handler = :INFO
+sentry_enabled = True
+sentry_dsn = __GLITCHTIP_DSN__
+sentry_environment = development
+sentry_server_name = <client_name>

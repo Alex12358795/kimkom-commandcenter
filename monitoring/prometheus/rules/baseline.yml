@@ -1,0 +1,128 @@
+groups:
+  - name: commandcenter-baseline
+    rules:
+      - alert: TargetDown
+        expr: (up == 0) and (time() - timestamp(up) < 2 * 60)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target {{ $labels.instance }} is down"
+          description: "Prometheus has been unable to scrape job {{ $labels.job }} at {{ $labels.instance }} for 5 minutes."
+
+      - alert: NodeFilesystemSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+          ) < 0.15
+          and
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+          ) >= 0.05
+          and on (instance, device, mountpoint)
+          node_filesystem_readonly == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} has less than 15% free space for 15 minutes."
+
+      - alert: NodeFilesystemSpaceCritical
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            /
+            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+          ) < 0.05
+          and on (instance, device, mountpoint)
+          node_filesystem_readonly == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critically low disk space on {{ $labels.instance }}"
+          description: "Filesystem {{ $labels.mountpoint }} has less than 5% free space for 5 minutes."
+
+  - name: commandcenter-probes
+    rules:
+      - alert: EndpointProbeFailed
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Endpoint probe failed for {{ $labels.instance }}"
+          description: "The {{ $labels.job }} probe for {{ $labels.instance }} has failed for 5 minutes."
+
+      - alert: CertificateExpiresSoon
+        expr: |
+          probe_ssl_earliest_cert_expiry - time() < 30 * 24 * 60 * 60
+          and
+          probe_ssl_earliest_cert_expiry - time() >= 7 * 24 * 60 * 60
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Certificate for {{ $labels.instance }} expires soon"
+          description: "The earliest certificate in the chain expires in less than 30 days."
+
+      - alert: CertificateExpiresCritical
+        expr: probe_ssl_earliest_cert_expiry - time() < 7 * 24 * 60 * 60
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Certificate for {{ $labels.instance }} expires within 7 days"
+          description: "The earliest certificate in the chain requires immediate renewal."
+
+  - name: kimkom-backups
+    rules:
+      - alert: KimKomBackupFailed
+        expr: kimkom_backup_v2_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup failed on {{ $labels.instance }}"
+          description: "The most recent KimKom backup-v2 operation failed."
+
+      - alert: KimKomBackupStale
+        expr: time() - kimkom_backup_v2_backup_last_success_timestamp_seconds > 90 * 60
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup is stale on {{ $labels.instance }}"
+          description: "No successful backup has completed within the 90-minute safety window."
+
+      - alert: KimKomBackupMetricsMissing
+        expr: up{job="client-nodes"} == 1 unless on(instance) kimkom_backup_v2_backup_last_run_success
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup metrics are missing on {{ $labels.instance }}"
+          description: "The client node is reachable but no backup-v2 status metric is present."
+
+      - alert: KimKomRestoreVerificationFailed
+        expr: kimkom_backup_v2_verify_last_run_success == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Restore verification failed on {{ $labels.instance }}"
+          description: "The most recent disposable restore verification failed."
+
+      - alert: KimKomRestoreVerificationStale
+        expr: time() - kimkom_backup_v2_verify_last_success_timestamp_seconds > 35 * 24 * 60 * 60
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Restore verification is stale on {{ $labels.instance }}"
+          description: "No successful disposable restore verification has completed in 35 days."

@@ -1,0 +1,1067 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="tcg_margin_dashboard" name="TCG Margin Dashboard">
+        <t t-call="web.html_container">
+            <t t-call="web.layout">
+                <t t-set="head">
+                    <meta name="viewport" content="width=1280"/>
+                    <style>
+                        body, #wrapwrap, .oe_structure, main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }
+                        * { box-sizing: border-box; }
+                        body { margin: 0; padding: 0; background: #f5f5f5; -webkit-font-smoothing: antialiased; }
+                        .tcg-dash { width: 100%; margin: 0 auto; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+                        .tcg-dash-header { display: flex; align-items: center; padding: 12px 16px; background: #d35400; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .tcg-dash-header-back { color: white; text-decoration: none; font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+                        .tcg-dash-header-title { flex: 1; font-size: 18px; font-weight: 600; }
+                        .tcg-dash-body { padding: 16px; }
+                        .tcg-dash-title { font-size: 24px; color: #d35400; margin: 0 0 4px 0; }
+                        .tcg-dash-subtitle { color: #666; font-size: 14px; margin: 0 0 16px 0; }
+
+                        .tcg-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+                        .tcg-multi-select { position: relative; }
+                        .tcg-multi-select-toggle { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 13px; font-family: inherit; width: 100%; cursor: pointer; text-align: left; display: flex; justify-content: space-between; align-items: center; }
+                        .tcg-multi-select-toggle:hover { border-color: #d35400; }
+                        .tcg-multi-select-panel { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 260px; overflow-y: auto; display: none; margin-top: 4px; }
+                        .tcg-multi-select-panel.open { display: block; }
+                        .tcg-multi-select-search { padding: 6px 10px; border: none; border-bottom: 1px solid #eee; font-size: 13px; font-family: inherit; width: 100%; outline: none; }
+                        .tcg-multi-select-search:focus { border-bottom-color: #d35400; }
+                        .tcg-multi-select-option { padding: 6px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+                        .tcg-multi-select-option:hover { background: #fdf8f5; }
+                        .tcg-multi-select-option.hidden { display: none; }
+                        .tcg-multi-select-option input { margin: 0; }
+                        .tcg-filter-label { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; display: block; }
+                        .tcg-filter-reset { padding: 8px 16px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 13px; font-weight: 600; color: #666; cursor: pointer; }
+                        .tcg-filter-reset:hover { border-color: #d35400; color: #d35400; }
+                        .tcg-product-link { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px; color: #666; text-decoration: none; }
+                        .tcg-product-link:hover { color: #d35400; }
+
+                        .tcg-margin-table-wrap { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+                        .tcg-margin-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                        .tcg-margin-table thead { background: #fafafa; position: sticky; top: 0; z-index: 10; }
+                        .tcg-margin-table th { padding: 8px 6px; text-align: left; font-weight: 600; color: #333; border-bottom: 2px solid #e5e5e5; white-space: nowrap; cursor: pointer; user-select: none; font-size: 11px; }
+                        .tcg-margin-table th:hover { color: #d35400; }
+                        .tcg-margin-table th .sort-arrow { display: inline-block; margin-left: 3px; color: #999; font-size: 10px; }
+                        .tcg-margin-table th.sort-asc .sort-arrow::after { content: '\25B2'; color: #d35400; }
+                        .tcg-margin-table th.sort-desc .sort-arrow::after { content: '\25BC'; color: #d35400; }
+                        .tcg-margin-table td { padding: 6px 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; white-space: nowrap; }
+                        .tcg-margin-table tbody tr:hover { background: #fdf8f5; }
+                        .tcg-margin-table .col-barcode { min-width: auto; white-space: normal; }
+                        .tcg-margin-table .col-name { min-width: 140px; white-space: normal; }
+                        .tcg-margin-table .col-category { min-width: 100px; white-space: normal; }
+                        .tcg-margin-table .col-num { text-align: right; }
+                        .tcg-margin-table .col-pct { text-align: right; font-weight: 700; }
+                        .tcg-margin-table .col-date { text-align: center; }
+
+                        .tcg-barcode-cell { display: flex; align-items: center; gap: 6px; }
+                        .tcg-barcode-search { background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px; color: #666; }
+                        .tcg-barcode-search:hover { color: #d35400; }
+
+                        .tcg-editable { border: 1px solid transparent; border-radius: 4px; padding: 2px 6px; background: #fafafa; text-align: right; font-family: inherit; font-size: inherit; width: 80px; }
+                        .tcg-editable:hover { border-color: #d35400; }
+                        .tcg-editable:focus { outline: none; border-color: #d35400; background: white; }
+                        .tcg-save-indicator { display: inline-block; margin-left: 4px; font-size: 11px; }
+                        .tcg-save-indicator.ok { color: #2e7d32; }
+                        .tcg-save-indicator.err { color: #d32f2f; }
+
+                        .tcg-margin-green { color: #2e7d32; }
+                        .tcg-margin-orange { color: #e67e22; }
+                        .tcg-margin-red { color: #d32f2f; }
+                        .tcg-scrape-btn { padding: 3px 8px; border-radius: 4px; border: 1px solid #714B67; background: white; color: #714B67; font-size: 11px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+                        .tcg-scrape-btn:hover { background: #714B67; color: white; }
+                        .tcg-scrape-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                        .tcg-retry-btn { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0 2px; margin-left: 4px; color: #999; }
+                        .tcg-retry-btn:hover { color: #d35400; }
+                        .tcg-price-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+                        .tcg-price-date { font-size: 10px; color: #999; }
+                        .tcg-price-diff { font-weight: 700; }
+                        .tcg-price-diff.cheaper { color: #d32f2f; }
+                        .tcg-price-diff.expensive { color: #666; }
+                        .tcg-comp-price { color: #333; }
+                        .tcg-bom-picker { position: absolute; background: white; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 200; min-width: 320px; max-width: 400px; padding: 8px; }
+                        .tcg-bom-picker-title { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+                        .tcg-bom-picker-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-radius: 4px; cursor: pointer; gap: 8px; }
+                        .tcg-bom-picker-item:hover { background: #fdf8f5; }
+                        .tcg-bom-picker-name { font-size: 12px; color: #333; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                        .tcg-bom-picker-price { font-size: 12px; font-weight: 600; color: #d35400; white-space: nowrap; }
+                        .tcg-bom-picker-select { padding: 2px 8px; border-radius: 4px; border: 1px solid #714B67; background: white; color: #714B67; font-size: 11px; cursor: pointer; font-weight: 600; }
+                        .tcg-bom-picker-select:hover { background: #714B67; color: white; }
+                        .tcg-bom-picker-close { position: absolute; top: 4px; right: 6px; background: none; border: none; cursor: pointer; font-size: 14px; color: #999; padding: 0; line-height: 1; }
+                        .tcg-bom-picker-close:hover { color: #d35400; }
+
+                        .tcg-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; padding: 8px; }
+                        .tcg-page-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; background: white; font-size: 13px; cursor: pointer; color: #333; }
+                        .tcg-page-btn:hover { border-color: #d35400; color: #d35400; }
+                        .tcg-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+                        .tcg-page-info { font-size: 13px; color: #666; }
+                        .tcg-page-size { font-size: 13px; color: #666; }
+                        .tcg-page-size select { padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 13px; }
+
+                        .tcg-loading { text-align: center; padding: 40px; color: #999; }
+                        .tcg-empty { text-align: center; padding: 40px; color: #999; }
+                        .tcg-count { font-size: 13px; color: #666; margin-bottom: 8px; }
+                        .tcg-count b { color: #333; }
+
+                        .tcg-editable { border: 1px solid transparent; border-radius: 4px; padding: 2px 4px; background: #fafafa; text-align: right; font-family: inherit; font-size: 12px; width: 65px; }
+                        .tcg-editable:hover { border-color: #d35400; }
+                        .tcg-editable:focus { outline: none; border-color: #d35400; background: white; }
+                        .tcg-search-input { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: white; font-size: 13px; font-family: inherit; width: 100%; }
+                        .tcg-search-input:hover { border-color: #d35400; }
+                        .tcg-search-input:focus { outline: none; border-color: #d35400; }
+                    </style>
+                </t>
+                <div class="tcg-dash">
+                    <div class="tcg-dash-header">
+                        <a href="/odoo" class="tcg-dash-header-back" aria-label="Back">&#8592;</a>
+                        <img src="/supertcg_products/static/src/img/header_logo.png" style="height:28px; margin-right:10px;" alt="SuperTCG"/>
+                        <div class="tcg-dash-header-title">Margin Analysis</div>
+                    </div>
+
+                    <div class="tcg-dash-body">
+                        <h1 class="tcg-dash-title">Product Margins</h1>
+                        <p class="tcg-dash-subtitle">Review cost, sales price, and margin for all barcoded products</p>
+                        <p style="font-size: 12px; color: #888; margin: -8px 0 12px 0; line-height: 1.4;">
+                            Products with <b>margeverkoop</b> tax use margin VAT: VAT is calculated on the profit margin (sales price minus cost), not on the full sales price.
+                        </p>
+
+                        <div class="tcg-count" id="tcg_count_label"></div>
+
+                        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                            <div style="flex: 1;">
+                                <span class="tcg-filter-label">Product Name</span>
+                                <input type="text" id="tcg_search_name" class="tcg-search-input" placeholder="Search product name..." autocomplete="off" oninput="debounceLoadProducts()" />
+                            </div>
+                            <div style="flex: 1;">
+                                <span class="tcg-filter-label">Barcode</span>
+                                <input type="text" id="tcg_search_barcode" class="tcg-search-input" placeholder="Search barcode..." autocomplete="off" oninput="debounceLoadProducts()" />
+                            </div>
+                        </div>
+
+                        <div class="tcg-filter-grid">
+                            <div>
+                                <span class="tcg-filter-label">Category</span>
+                                <div class="tcg-multi-select" id="tcg_ms_category">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_category', event)">All Categories <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="" checked="checked" onchange="applyFilters()" /> All Categories</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label">Cost</span>
+                                <div class="tcg-multi-select" id="tcg_ms_cost">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_cost', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="added" onchange="applyFilters()" /> Added</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="not_added" onchange="applyFilters()" /> Not added</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label">Sales Price</span>
+                                <div class="tcg-multi-select" id="tcg_ms_price">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_price', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="below_50" onchange="applyFilters()" /> Below €50</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="50_100" onchange="applyFilters()" /> €50 - €100</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="above_100" onchange="applyFilters()" /> Above €100</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label">Sales price</span>
+                                <div class="tcg-multi-select" id="tcg_ms_comp_price">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_comp_price', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="added" onchange="applyFilters()" /> Added</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="not_added" onchange="applyFilters()" /> Not added</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label"># Sales</span>
+                                <div class="tcg-multi-select" id="tcg_ms_sales">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_sales', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="no_sales" onchange="applyFilters()" /> No sales</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="has_sales" onchange="applyFilters()" /> Has sales</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="1_5" onchange="applyFilters()" /> 1 - 5</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="5_10" onchange="applyFilters()" /> 6 - 10</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="above_10" onchange="applyFilters()" /> Above 10</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label">Stock</span>
+                                <div class="tcg-multi-select" id="tcg_ms_stock">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_stock', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="no_stock" onchange="applyFilters()" /> No stock</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="has_stock" onchange="applyFilters()" /> Has stock</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="negative" onchange="applyFilters()" /> Negative stock</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="0_5" onchange="applyFilters()" /> 1 - 5</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="5_10" onchange="applyFilters()" /> 5 - 10</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="above_10" onchange="applyFilters()" /> +10</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="tcg-filter-label">Margin</span>
+                                <div class="tcg-multi-select" id="tcg_ms_margin">
+                                    <button class="tcg-multi-select-toggle" onclick="toggleMultiSelect('tcg_ms_margin', event)">All <span>&#9662;</span></button>
+                                    <div class="tcg-multi-select-panel">
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="negative" onchange="applyFilters()" /> Negative</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="0_15" onchange="applyFilters()" /> 0% - 15%</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="15_30" onchange="applyFilters()" /> 15% - 30%</label>
+                                        <label class="tcg-multi-select-option"><input type="checkbox" value="above_30" onchange="applyFilters()" /> +30%</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: flex-end;">
+                                <button class="tcg-filter-reset" onclick="resetFilters()">Reset</button>
+                            </div>
+                        </div>
+
+                        <div class="tcg-margin-table-wrap">
+                            <table class="tcg-margin-table" id="tcg_margin_table">
+                                <thead>
+                                    <tr>
+                                        <th class="col-barcode" onclick="sortBy('barcode')">Barcode <span class="sort-arrow"></span></th>
+                                        <th class="col-name" onclick="sortBy('name')">Product <span class="sort-arrow"></span></th>
+                                        <th class="col-category" onclick="sortBy('category')">Category <span class="sort-arrow"></span></th>
+                                        <th class="col-link">Link</th>
+                                        <th class="col-num" onclick="sortBy('standard_price')">Cost (€) <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('list_price')">Sales (€) <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('cgs_price')">CGS Price <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('bom_price')">BOM Price <span class="sort-arrow"></span></th>
+                                        <th class="col-pct" onclick="sortBy('price_diff_pct')">vs CGS% <span class="sort-arrow"></span></th>
+                                        <th class="col-pct" onclick="sortBy('bom_price_diff_pct')">vs BOM% <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('tax')">Tax% <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('net_sales')">Net Sales (€) <span class="sort-arrow"></span></th>
+                                        <th class="col-pct" onclick="sortBy('margin_pct')">Margin% <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('sales_count')"># Sales <span class="sort-arrow"></span></th>
+                                        <th class="col-date" onclick="sortBy('create_date')">Created <span class="sort-arrow"></span></th>
+                                        <th class="col-num" onclick="sortBy('qty_available')">Stock <span class="sort-arrow"></span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tcg_table_body">
+                                    <tr><td colspan="16" class="tcg-loading">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="tcg-pagination" id="tcg_pagination"></div>
+                    </div>
+                </div>
+
+                <script>
+                    var currentSort = {field: 'margin_pct', order: 'asc'};
+                    var currentPage = 1;
+                    var pageSize = 50;
+                    var totalItems = 0;
+                    var searchTimer;
+                    var loadRequestId = 0;
+
+                    function rpc(url, params) {
+                        return fetch(url, {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({jsonrpc: '2.0', method: 'call', params: params, id: Date.now()}),
+                            credentials: 'same-origin',
+                        }).then(function(r) { return r.json(); }).then(function(d) { return d.result; });
+                    }
+
+                    function getMultiSelectValues(wrapperId) {
+                        var wrapper = document.getElementById(wrapperId);
+                        var checked = [];
+                        wrapper.querySelectorAll('input[type="checkbox"]').forEach(function(cb) {
+                            if (cb.checked) checked.push(cb.value);
+                        });
+                        return checked;
+                    }
+
+                    function updateMultiSelectLabel(wrapperId, defaultLabel) {
+                        var wrapper = document.getElementById(wrapperId);
+                        var checked = wrapper.querySelectorAll('input[type="checkbox"]:checked');
+                        var btn = wrapper.querySelector('.tcg-multi-select-toggle');
+                        if (checked.length === 0) {
+                            btn.childNodes[0].textContent = defaultLabel + ' ';
+                        } else if (checked.length === 1) {
+                            btn.childNodes[0].textContent = checked[0].parentElement.textContent.trim() + ' ';
+                        } else {
+                            btn.childNodes[0].textContent = checked.length + ' selected ';
+                        }
+                    }
+
+                    function toggleMultiSelect(wrapperId, ev) {
+                        if (ev) ev.stopPropagation();
+                        var panel = document.getElementById(wrapperId).querySelector('.tcg-multi-select-panel');
+                        var isOpen = panel.classList.contains('open');
+                        document.querySelectorAll('.tcg-multi-select-panel').forEach(function(p) { p.classList.remove('open'); });
+                        if (!isOpen) panel.classList.add('open');
+                    }
+
+                    document.addEventListener('click', function() {
+                        document.querySelectorAll('.tcg-multi-select-panel').forEach(function(p) { p.classList.remove('open'); });
+                    });
+
+                    // Stop clicks inside dropdown panels from closing them
+                    document.querySelectorAll('.tcg-multi-select-panel').forEach(function(panel) {
+                        panel.addEventListener('click', function(ev) { ev.stopPropagation(); });
+                    });
+
+                    function debounceLoadProducts() {
+                        if (searchTimer) clearTimeout(searchTimer);
+                        searchTimer = setTimeout(function() {
+                            currentPage = 1;
+                            loadProducts();
+                        }, 300);
+                    }
+
+                    function applyFilters() {
+                        updateMultiSelectLabel('tcg_ms_cost', 'All');
+                        updateMultiSelectLabel('tcg_ms_price', 'All');
+                        updateMultiSelectLabel('tcg_ms_comp_price', 'All');
+                        updateMultiSelectLabel('tcg_ms_sales', 'All');
+                        updateMultiSelectLabel('tcg_ms_stock', 'All');
+                        updateMultiSelectLabel('tcg_ms_margin', 'All');
+                        currentPage = 1;
+                        loadProducts();
+                    }
+
+                    function resetFilters() {
+                        document.querySelectorAll('.tcg-multi-select input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+                        document.getElementById('tcg_ms_category').querySelector('input[type="checkbox"][value=""]').checked = true;
+                        document.getElementById('tcg_search_name').value = '';
+                        document.getElementById('tcg_search_barcode').value = '';
+                        ['tcg_ms_cost','tcg_ms_price','tcg_ms_comp_price','tcg_ms_sales','tcg_ms_stock','tcg_ms_margin'].forEach(function(id) {
+                            updateMultiSelectLabel(id, 'All');
+                        });
+                        currentPage = 1;
+                        loadProducts();
+                    }
+
+                    function loadCategories() {
+                        rpc('/tcg/margin/get_categories', {}).then(function(cats) {
+                            var panel = document.getElementById('tcg_ms_category').querySelector('.tcg-multi-select-panel');
+                            panel.innerHTML = '';
+
+                            // Search input
+                            var searchInput = document.createElement('input');
+                            searchInput.type = 'text';
+                            searchInput.className = 'tcg-multi-select-search';
+                            searchInput.placeholder = 'Search categories...';
+                            searchInput.oninput = function() {
+                                var term = this.value.toLowerCase();
+                                panel.querySelectorAll('.tcg-multi-select-option').forEach(function(opt) {
+                                    var txt = opt.textContent.toLowerCase();
+                                    if (txt.indexOf(term) >= 0) {
+                                        opt.classList.remove('hidden');
+                                    } else {
+                                        opt.classList.add('hidden');
+                                    }
+                                });
+                            };
+                            panel.appendChild(searchInput);
+
+                            var allLabel = document.createElement('label');
+                            allLabel.className = 'tcg-multi-select-option';
+                            var allCb = document.createElement('input');
+                            allCb.type = 'checkbox';
+                            allCb.value = '';
+                            allCb.checked = true;
+                            allCb.onchange = function() {
+                                if (this.checked) {
+                                    panel.querySelectorAll('input[type="checkbox"]:not([value=""])').forEach(function(cb) { cb.checked = false; });
+                                }
+                                applyFilters();
+                            };
+                            allLabel.appendChild(allCb);
+                            allLabel.appendChild(document.createTextNode(' All Categories'));
+                            panel.appendChild(allLabel);
+                            cats.forEach(function(c) {
+                                var label = document.createElement('label');
+                                label.className = 'tcg-multi-select-option';
+                                var cb = document.createElement('input');
+                                cb.type = 'checkbox';
+                                cb.value = c.id;
+                                cb.onchange = function() {
+                                    if (this.checked) {
+                                        var allBox = panel.querySelector('input[type="checkbox"][value=""]');
+                                        if (allBox) allBox.checked = false;
+                                    }
+                                    applyFilters();
+                                };
+                                label.appendChild(cb);
+                                label.appendChild(document.createTextNode(' ' + c.name));
+                                panel.appendChild(label);
+                            });
+                        });
+                    }
+
+                    function sortBy(field) {
+                        if (currentSort.field === field) {
+                            currentSort.order = currentSort.order === 'asc' ? 'desc' : 'asc';
+                        } else {
+                            currentSort.field = field;
+                            currentSort.order = 'asc';
+                        }
+                        loadProducts();
+                    }
+
+                    function updateSortHeaders() {
+                        document.querySelectorAll('.tcg-margin-table th').forEach(function(th) {
+                            th.classList.remove('sort-asc', 'sort-desc');
+                        });
+                        var headers = document.querySelectorAll('.tcg-margin-table th');
+                        var fieldMap = ['barcode','name','category','link','standard_price','list_price','cgs_price','bom_price','price_diff_pct','bom_price_diff_pct','tax','net_sales','margin_pct','sales_count','create_date','qty_available'];
+                        var idx = fieldMap.indexOf(currentSort.field);
+                        if (idx >= 0 &amp;&amp; headers[idx]) {
+                            headers[idx].classList.add(currentSort.order === 'asc' ? 'sort-asc' : 'sort-desc');
+                        }
+                    }
+
+                    function formatDate(iso) {
+                        if (!iso) return '';
+                        var d = new Date(iso);
+                        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+                    }
+
+                    function getMarginClass(pct) {
+                        if (pct === null || pct === undefined) return '';
+                        if (pct >= 30) return 'tcg-margin-green';
+                        if (pct &lt; 0) return 'tcg-margin-red';
+                        if (pct &lt; 15) return 'tcg-margin-red';
+                        return 'tcg-margin-orange';
+                    }
+
+                    function openBarcodeSearch(barcode) {
+                        if (!barcode) return;
+                        var url = 'https://www.google.com/search?q=' + encodeURIComponent(barcode);
+                        window.open(url, '_blank');
+                        if (barcode.length === 13 &amp;&amp; barcode.charAt(0) === '0') {
+                            var urlNoZero = 'https://www.google.com/search?q=' + encodeURIComponent(barcode.substring(1));
+                            window.open(urlNoZero, '_blank');
+                        }
+                    }
+
+                    function updateCompetitorCells(row, source, price, priceDate, productId, barcode) {
+                        // Get list price from the sales input in this row
+                        var salesInput = row.cells[5].querySelector('input');
+                        var listPrice = salesInput ? (parseFloat(salesInput.value) || 0) : 0;
+
+                        if (source === 'cgs') {
+                            var cgsCell = row.cells[6];
+                            var diffCell = row.cells[8];
+                            cgsCell.innerHTML = '';
+                            var wrapCgs = document.createElement('div');
+                            wrapCgs.className = 'tcg-price-wrap';
+                            var cgsSpan = document.createElement('span');
+                            cgsSpan.className = 'tcg-comp-price';
+                            cgsSpan.textContent = '€ ' + price.toFixed(2);
+                            wrapCgs.appendChild(cgsSpan);
+                            if (priceDate) {
+                                var cgsDate = document.createElement('span');
+                                cgsDate.className = 'tcg-price-date';
+                                cgsDate.textContent = formatDate(priceDate);
+                                wrapCgs.appendChild(cgsDate);
+                            }
+                            var retryCgs = document.createElement('button');
+                            retryCgs.className = 'tcg-retry-btn';
+                            retryCgs.textContent = '🔄';
+                            retryCgs.title = 'Refresh price';
+                            retryCgs.onclick = function() { scrapeCompetitorPrice(productId, barcode, 'cgs', this); };
+                            wrapCgs.appendChild(retryCgs);
+                            cgsCell.appendChild(wrapCgs);
+
+                            diffCell.innerHTML = '';
+                            diffCell.className = 'col-pct';
+                            diffCell.style.color = '';
+                            if (listPrice > 0) {
+                                var diff = ((listPrice - price) / price * 100.0);
+                                diffCell.className += ' tcg-price-diff ' + (diff &lt; 0 ? 'cheaper' : 'expensive');
+                                diffCell.textContent = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
+                                diffCell.title = diff &lt; 0 ? 'We are cheaper than CGS' : 'We are more expensive than CGS';
+                            } else {
+                                diffCell.textContent = 'N/A';
+                                diffCell.style.color = '#999';
+                            }
+                        } else if (source === 'bom') {
+                            var bomCell = row.cells[7];
+                            var diffCell = row.cells[9];
+                            bomCell.innerHTML = '';
+                            var wrapBom = document.createElement('div');
+                            wrapBom.className = 'tcg-price-wrap';
+                            var bomSpan = document.createElement('span');
+                            bomSpan.className = 'tcg-comp-price';
+                            bomSpan.textContent = '€ ' + price.toFixed(2);
+                            wrapBom.appendChild(bomSpan);
+                            if (priceDate) {
+                                var bomDate = document.createElement('span');
+                                bomDate.className = 'tcg-price-date';
+                                bomDate.textContent = formatDate(priceDate);
+                                wrapBom.appendChild(bomDate);
+                            }
+                            var retryBom = document.createElement('button');
+                            retryBom.className = 'tcg-retry-btn';
+                            retryBom.textContent = '🔄';
+                            retryBom.title = 'Refresh price';
+                            retryBom.onclick = function() { scrapeCompetitorPrice(productId, barcode, 'bom', this); };
+                            wrapBom.appendChild(retryBom);
+                            bomCell.appendChild(wrapBom);
+
+                            diffCell.innerHTML = '';
+                            diffCell.className = 'col-pct';
+                            diffCell.style.color = '';
+                            if (listPrice > 0) {
+                                var diff = ((listPrice - price) / price * 100.0);
+                                diffCell.className += ' tcg-price-diff ' + (diff &lt; 0 ? 'cheaper' : 'expensive');
+                                diffCell.textContent = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
+                                diffCell.title = diff &lt; 0 ? 'We are cheaper than BOM' : 'We are more expensive than BOM';
+                            } else {
+                                diffCell.textContent = 'N/A';
+                                diffCell.style.color = '#999';
+                            }
+                        }
+                    }
+
+                    function closeBomPicker() {
+                        var existing = document.querySelector('.tcg-bom-picker');
+                        if (existing) existing.remove();
+                    }
+
+                    function showBomPicker(anchorElement, options, productId, barcode) {
+                        closeBomPicker();
+                        var picker = document.createElement('div');
+                        picker.className = 'tcg-bom-picker';
+
+                        var closeBtn = document.createElement('button');
+                        closeBtn.className = 'tcg-bom-picker-close';
+                        closeBtn.innerHTML = '×';
+                        closeBtn.title = 'Close';
+                        closeBtn.onclick = function(ev) { ev.stopPropagation(); closeBomPicker(); };
+                        picker.appendChild(closeBtn);
+
+                        var title = document.createElement('div');
+                        title.className = 'tcg-bom-picker-title';
+                        title.textContent = 'Select matching BOM product:';
+                        picker.appendChild(title);
+
+                        options.forEach(function(opt) {
+                            var item = document.createElement('div');
+                            item.className = 'tcg-bom-picker-item';
+
+                            var nameSpan = document.createElement('span');
+                            nameSpan.className = 'tcg-bom-picker-name';
+                            nameSpan.title = opt.name;
+                            nameSpan.textContent = opt.name.replace(/&amp;/g, '\x26').replace(/&lt;/g, '\x3C').replace(/&gt;/g, '\x3E');
+                            item.appendChild(nameSpan);
+
+                            var priceSpan = document.createElement('span');
+                            priceSpan.className = 'tcg-bom-picker-price';
+                            priceSpan.textContent = '€ ' + opt.price.toFixed(2);
+                            item.appendChild(priceSpan);
+
+                            var selectBtn = document.createElement('button');
+                            selectBtn.className = 'tcg-bom-picker-select';
+                            selectBtn.textContent = 'Select';
+                            selectBtn.onclick = function(ev) {
+                                ev.stopPropagation();
+                                closeBomPicker();
+                                var row = anchorElement.parentElement.parentElement;
+                                anchorElement.textContent = '⏳ Scraping...';
+                                rpc('/tcg/margin/scrape_price', {
+                                    product_id: productId,
+                                    barcode: barcode,
+                                    source: 'bom',
+                                    product_url: opt.url,
+                                }).then(function(result) {
+                                    if (result.success) {
+                                        updateCompetitorCells(row, 'bom', result.price, result.date, productId, barcode);
+                                    } else {
+                                        anchorElement.textContent = 'Not found';
+                                    }
+                                }).catch(function() {
+                                    anchorElement.textContent = 'Not found';
+                                });
+                            };
+                            item.appendChild(selectBtn);
+                            picker.appendChild(item);
+                        });
+
+                        // Position below the anchor button
+                        var rect = anchorElement.getBoundingClientRect();
+                        picker.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+                        picker.style.left = (rect.left + window.scrollX) + 'px';
+                        document.body.appendChild(picker);
+                    }
+
+                    function scrapeCompetitorPrice(productId, barcode, source, btnElement) {
+                        if (btnElement.textContent === '⏳ Scraping...') return;
+
+                        var row = btnElement.parentElement.parentElement;
+
+                        if (source === 'cgs') {
+                            btnElement.textContent = '⏳ Scraping...';
+                            rpc('/tcg/margin/scrape_price', {
+                                product_id: productId,
+                                barcode: barcode,
+                                source: 'cgs',
+                            }).then(function(result) {
+                                if (result.success) {
+                                    updateCompetitorCells(row, 'cgs', result.price, result.date, productId, barcode);
+                                } else {
+                                    btnElement.textContent = 'Not found';
+                                }
+                            }).catch(function() {
+                                btnElement.textContent = 'Not found';
+                            });
+                        } else if (source === 'bom') {
+                            // Get product name from the row
+                            var productName = row.cells[1].textContent.trim();
+                            if (!productName) {
+                                btnElement.textContent = 'No name';
+                                return;
+                            }
+                            btnElement.textContent = '⏳ Searching...';
+                            rpc('/tcg/margin/scrape_price', {
+                                source: 'bom_search',
+                                product_name: productName,
+                            }).then(function(result) {
+                                if (result.success &amp;&amp; result.options &amp;&amp; result.options.length > 0) {
+                                    btnElement.textContent = source === 'bom' ? 'Scrape BOM' : '🔄';
+                                    showBomPicker(btnElement, result.options, productId, barcode);
+                                } else {
+                                    btnElement.textContent = 'Not found';
+                                }
+                            }).catch(function() {
+                                btnElement.textContent = 'Not found';
+                            });
+                        }
+                    }
+
+                    function recomputeRow(cost, salesPrice, taxPct, isMargin) {
+                        var net;
+                        if (isMargin &amp;&amp; taxPct) {
+                            var marginVat = ((salesPrice - cost) * taxPct) / 100.0;
+                            net = salesPrice - marginVat;
+                        } else {
+                            net = taxPct ? (salesPrice / (1 + taxPct / 100.0)) : salesPrice;
+                        }
+                        if (cost &lt;= 0) {
+                            return {net_sales: net, margin_pct: null};
+                        }
+                        var margin = net ? ((net - cost) / net * 100.0) : 0.0;
+                        return {net_sales: net, margin_pct: margin};
+                    }
+
+                    function saveField(productId, field, value, indicator, taxPct, isMargin, netCell, marginCell, costInput, salesInput) {
+                        indicator.textContent = '...';
+                        indicator.className = 'tcg-save-indicator';
+                        rpc('/tcg/margin/update_product', {
+                            product_id: productId,
+                            field: field,
+                            value: parseFloat(value) || 0,
+                        }).then(function(result) {
+                            if (result.success) {
+                                indicator.textContent = '✓';
+                                indicator.className = 'tcg-save-indicator ok';
+                                setTimeout(function() { indicator.textContent = ''; }, 2000);
+                                var cost = parseFloat(costInput.value) || 0;
+                                var sales = parseFloat(salesInput.value) || 0;
+                                var recalc = recomputeRow(cost, sales, taxPct, isMargin);
+                                netCell.textContent = recalc.net_sales.toFixed(2);
+                                if (recalc.margin_pct === null || recalc.margin_pct === undefined) {
+                                    marginCell.textContent = 'No cost';
+                                    marginCell.style.fontStyle = 'italic';
+                                    marginCell.style.color = '#999';
+                                } else {
+                                    marginCell.textContent = recalc.margin_pct.toFixed(1) + '%';
+                                    marginCell.style.fontStyle = '';
+                                    marginCell.style.color = '';
+                                }
+                                marginCell.className = 'col-pct ' + getMarginClass(recalc.margin_pct);
+                            } else {
+                                indicator.textContent = '✗';
+                                indicator.className = 'tcg-save-indicator err';
+                            }
+                        }).catch(function() {
+                            indicator.textContent = '✗';
+                            indicator.className = 'tcg-save-indicator err';
+                        });
+                    }
+
+                    function renderTable(products) {
+                        var tbody = document.getElementById('tcg_table_body');
+                        tbody.innerHTML = '';
+                        if (!products || products.length === 0) {
+                            var emptyTr = document.createElement('tr');
+                            var emptyTd = document.createElement('td');
+                            emptyTd.colSpan = 16;
+                            emptyTd.className = 'tcg-empty';
+                            emptyTd.textContent = 'No products found';
+                            emptyTr.appendChild(emptyTd);
+                            tbody.appendChild(emptyTr);
+                            return;
+                        }
+                        products.forEach(function(p) {
+                            var tr = document.createElement('tr');
+                            var marginClass = getMarginClass(p.margin_pct);
+
+                            var tdBarcode = document.createElement('td');
+                            tdBarcode.className = 'col-barcode';
+                            var bcWrap = document.createElement('div');
+                            bcWrap.className = 'tcg-barcode-cell';
+                            var bcSpan = document.createElement('span');
+                            bcSpan.textContent = p.barcode || '';
+                            bcWrap.appendChild(bcSpan);
+                            if (p.barcode) {
+                                var searchBtn = document.createElement('button');
+                                searchBtn.className = 'tcg-barcode-search';
+                                searchBtn.innerHTML = '&#128269;';
+                                searchBtn.title = 'Search barcode on Google';
+                                searchBtn.onclick = function() { openBarcodeSearch(p.barcode); };
+                                bcWrap.appendChild(searchBtn);
+                            }
+                            tdBarcode.appendChild(bcWrap);
+                            tr.appendChild(tdBarcode);
+
+                            var tdName = document.createElement('td');
+                            tdName.className = 'col-name';
+                            tdName.textContent = p.name || '';
+                            tr.appendChild(tdName);
+
+                            var tdCategory = document.createElement('td');
+                            tdCategory.className = 'col-category';
+                            tdCategory.textContent = p.category || '';
+                            tr.appendChild(tdCategory);
+
+                            var tdLink = document.createElement('td');
+                            tdLink.className = 'col-link';
+                            if (p.product_url) {
+                                var linkA = document.createElement('a');
+                                linkA.href = p.product_url;
+                                linkA.target = '_blank';
+                                linkA.className = 'tcg-product-link';
+                                linkA.title = 'Open product in Odoo';
+                                linkA.innerHTML = '&#8599;';
+                                tdLink.appendChild(linkA);
+                            }
+                            tr.appendChild(tdLink);
+
+                            var tdCost = document.createElement('td');
+                            tdCost.className = 'col-num';
+                            var costInput = document.createElement('input');
+                            costInput.type = 'number';
+                            costInput.className = 'tcg-editable';
+                            costInput.value = (p.standard_price || 0).toFixed(2);
+                            costInput.step = '0.01';
+                            var costInd = document.createElement('span');
+                            costInd.className = 'tcg-save-indicator';
+                            tdCost.appendChild(costInput);
+                            tdCost.appendChild(costInd);
+                            tr.appendChild(tdCost);
+
+                            var tdSales = document.createElement('td');
+                            tdSales.className = 'col-num';
+                            var salesInput = document.createElement('input');
+                            salesInput.type = 'number';
+                            salesInput.className = 'tcg-editable';
+                            salesInput.value = (p.list_price || 0).toFixed(2);
+                            salesInput.step = '0.01';
+                            var salesInd = document.createElement('span');
+                            salesInd.className = 'tcg-save-indicator';
+                            tdSales.appendChild(salesInput);
+                            tdSales.appendChild(salesInd);
+                            tr.appendChild(tdSales);
+
+                            // CGS Price column
+                            var tdCgs = document.createElement('td');
+                            tdCgs.className = 'col-num';
+                            if (p.cgs_price > 0) {
+                                var wrapCgs = document.createElement('div');
+                                wrapCgs.className = 'tcg-price-wrap';
+                                var cgsSpan = document.createElement('span');
+                                cgsSpan.className = 'tcg-comp-price';
+                                cgsSpan.textContent = '€ ' + p.cgs_price.toFixed(2);
+                                wrapCgs.appendChild(cgsSpan);
+                                if (p.cgs_price_date) {
+                                    var cgsDate = document.createElement('span');
+                                    cgsDate.className = 'tcg-price-date';
+                                    cgsDate.textContent = formatDate(p.cgs_price_date);
+                                    wrapCgs.appendChild(cgsDate);
+                                }
+                                var retryCgs = document.createElement('button');
+                                retryCgs.className = 'tcg-retry-btn';
+                                retryCgs.textContent = '🔄';
+                                retryCgs.title = 'Refresh price';
+                                retryCgs.onclick = (function(pid, barcode) {
+                                    return function() { scrapeCompetitorPrice(pid, barcode, 'cgs', this); };
+                                })(p.id, p.barcode);
+                                wrapCgs.appendChild(retryCgs);
+                                tdCgs.appendChild(wrapCgs);
+                            } else {
+                                var scrapeBtn = document.createElement('button');
+                                scrapeBtn.className = 'tcg-scrape-btn';
+                                scrapeBtn.textContent = 'Scrape CGS';
+                                scrapeBtn.onclick = (function(pid, barcode) {
+                                    return function() { scrapeCompetitorPrice(pid, barcode, 'cgs', this); };
+                                })(p.id, p.barcode);
+                                tdCgs.appendChild(scrapeBtn);
+                            }
+                            tr.appendChild(tdCgs);
+
+                            // BOM Price column
+                            var tdBom = document.createElement('td');
+                            tdBom.className = 'col-num';
+                            if (p.bom_price > 0) {
+                                var wrapBom = document.createElement('div');
+                                wrapBom.className = 'tcg-price-wrap';
+                                var bomSpan = document.createElement('span');
+                                bomSpan.className = 'tcg-comp-price';
+                                bomSpan.textContent = '€ ' + p.bom_price.toFixed(2);
+                                wrapBom.appendChild(bomSpan);
+                                if (p.bom_price_date) {
+                                    var bomDate = document.createElement('span');
+                                    bomDate.className = 'tcg-price-date';
+                                    bomDate.textContent = formatDate(p.bom_price_date);
+                                    wrapBom.appendChild(bomDate);
+                                }
+                                var retryBom = document.createElement('button');
+                                retryBom.className = 'tcg-retry-btn';
+                                retryBom.textContent = '🔄';
+                                retryBom.title = 'Refresh price';
+                                retryBom.onclick = (function(pid, barcode) {
+                                    return function() { scrapeCompetitorPrice(pid, barcode, 'bom', this); };
+                                })(p.id, p.barcode);
+                                wrapBom.appendChild(retryBom);
+                                tdBom.appendChild(wrapBom);
+                            } else {
+                                var scrapeBomBtn = document.createElement('button');
+                                scrapeBomBtn.className = 'tcg-scrape-btn';
+                                scrapeBomBtn.textContent = 'Scrape BOM';
+                                scrapeBomBtn.onclick = (function(pid, barcode) {
+                                    return function() { scrapeCompetitorPrice(pid, barcode, 'bom', this); };
+                                })(p.id, p.barcode);
+                                tdBom.appendChild(scrapeBomBtn);
+                            }
+                            tr.appendChild(tdBom);
+
+                            // vs CGS % column
+                            var tdDiff = document.createElement('td');
+                            tdDiff.className = 'col-pct';
+                            if (p.price_diff_pct !== null &amp;&amp; p.price_diff_pct !== undefined) {
+                                tdDiff.className += ' tcg-price-diff ' + (p.price_diff_pct &lt; 0 ? 'cheaper' : 'expensive');
+                                tdDiff.textContent = (p.price_diff_pct > 0 ? '+' : '') + p.price_diff_pct + '%';
+                                tdDiff.title = p.price_diff_pct &lt; 0 ? 'We are cheaper than CGS' : 'We are more expensive than CGS';
+                            } else if (p.cgs_price > 0) {
+                                tdDiff.textContent = 'N/A';
+                                tdDiff.style.color = '#999';
+                            } else {
+                                tdDiff.textContent = '-';
+                                tdDiff.style.color = '#ccc';
+                            }
+                            tr.appendChild(tdDiff);
+
+                            // vs BOM % column
+                            var tdBomDiff = document.createElement('td');
+                            tdBomDiff.className = 'col-pct';
+                            if (p.bom_price_diff_pct !== null &amp;&amp; p.bom_price_diff_pct !== undefined) {
+                                tdBomDiff.className += ' tcg-price-diff ' + (p.bom_price_diff_pct &lt; 0 ? 'cheaper' : 'expensive');
+                                tdBomDiff.textContent = (p.bom_price_diff_pct > 0 ? '+' : '') + p.bom_price_diff_pct + '%';
+                                tdBomDiff.title = p.bom_price_diff_pct &lt; 0 ? 'We are cheaper than BOM' : 'We are more expensive than BOM';
+                            } else if (p.bom_price > 0) {
+                                tdBomDiff.textContent = 'N/A';
+                                tdBomDiff.style.color = '#999';
+                            } else {
+                                tdBomDiff.textContent = '-';
+                                tdBomDiff.style.color = '#ccc';
+                            }
+                            tr.appendChild(tdBomDiff);
+
+                            var tdTax = document.createElement('td');
+                            tdTax.className = 'col-num';
+                            if (p.is_margin) {
+                                tdTax.textContent = 'Margeverkoop';
+                                tdTax.title = 'Margin VAT: btw over winstmarge, niet over volledige prijs';
+                            } else {
+                                tdTax.textContent = (p.tax || 0).toFixed(1) + '%';
+                            }
+                            tr.appendChild(tdTax);
+
+                            var tdNet = document.createElement('td');
+                            tdNet.className = 'col-num';
+                            tdNet.textContent = (p.net_sales !== null &amp;&amp; p.net_sales !== undefined) ? p.net_sales.toFixed(2) : '0.00';
+                            tr.appendChild(tdNet);
+
+                            var tdMargin = document.createElement('td');
+                            tdMargin.className = 'col-pct ' + marginClass;
+                            if (p.margin_pct === null || p.margin_pct === undefined) {
+                                tdMargin.textContent = 'No cost';
+                                tdMargin.style.fontStyle = 'italic';
+                                tdMargin.style.color = '#999';
+                            } else {
+                                tdMargin.textContent = p.margin_pct.toFixed(1) + '%';
+                                tdMargin.style.fontStyle = '';
+                            }
+                            tr.appendChild(tdMargin);
+
+                            var tdSalesCount = document.createElement('td');
+                            tdSalesCount.className = 'col-num';
+                            tdSalesCount.textContent = (p.sales_count !== null &amp;&amp; p.sales_count !== undefined) ? String(p.sales_count) : '0';
+                            tr.appendChild(tdSalesCount);
+
+                            var tdDate = document.createElement('td');
+                            tdDate.className = 'col-date';
+                            tdDate.textContent = formatDate(p.create_date);
+                            tr.appendChild(tdDate);
+
+                            var tdStock = document.createElement('td');
+                            tdStock.className = 'col-num';
+                            tdStock.textContent = (p.qty_available !== null &amp;&amp; p.qty_available !== undefined) ? String(p.qty_available) : '0';
+                            tr.appendChild(tdStock);
+
+                            costInput.addEventListener('blur', function() {
+                                saveField(p.id, 'standard_price', this.value, costInd, p.tax, p.is_margin, tdNet, tdMargin, costInput, salesInput);
+                            });
+                            costInput.addEventListener('keydown', function(ev) {
+                                if (ev.key === 'Enter') { this.blur(); }
+                            });
+                            salesInput.addEventListener('blur', function() {
+                                saveField(p.id, 'list_price', this.value, salesInd, p.tax, p.is_margin, tdNet, tdMargin, costInput, salesInput);
+                            });
+                            salesInput.addEventListener('keydown', function(ev) {
+                                if (ev.key === 'Enter') { this.blur(); }
+                            });
+
+                            tbody.appendChild(tr);
+                        });
+                    }
+
+                    function renderPagination(page, pageCount, total) {
+                        var container = document.getElementById('tcg_pagination');
+                        container.innerHTML = '';
+                        var prevBtn = document.createElement('button');
+                        prevBtn.className = 'tcg-page-btn';
+                        prevBtn.textContent = 'Prev';
+                        prevBtn.disabled = currentPage == 1;
+                        prevBtn.onclick = function() { changePage(currentPage - 1); };
+                        container.appendChild(prevBtn);
+                        var info = document.createElement('span');
+                        info.className = 'tcg-page-info';
+                        info.textContent = 'Page ' + currentPage + ' of ' + pageCount + ' (' + total + ' products)';
+                        container.appendChild(info);
+                        var nextBtn = document.createElement('button');
+                        nextBtn.className = 'tcg-page-btn';
+                        nextBtn.textContent = 'Next';
+                        nextBtn.disabled = currentPage == pageCount;
+                        nextBtn.onclick = function() { changePage(currentPage + 1); };
+                        container.appendChild(nextBtn);
+                        var sizeWrap = document.createElement('span');
+                        sizeWrap.className = 'tcg-page-size';
+                        var sel = document.createElement('select');
+                        sel.onchange = function() { changePageSize(this.value); };
+                        [25,50,100,200].forEach(function(sz) {
+                            var opt = document.createElement('option');
+                            opt.value = sz;
+                            opt.textContent = sz + '/page';
+                            if (sz === pageSize) opt.selected = true;
+                            sel.appendChild(opt);
+                        });
+                        sizeWrap.appendChild(sel);
+                        container.appendChild(sizeWrap);
+                    }
+
+                    function changePage(p) {
+                        if (p &lt; 1) return;
+                        currentPage = p;
+                        loadProducts();
+                    }
+
+                    function changePageSize(sz) {
+                        pageSize = parseInt(sz);
+                        currentPage = 1;
+                        loadProducts();
+                    }
+
+                    function loadProducts() {
+                        var reqId = ++loadRequestId;
+                        var tbody = document.getElementById('tcg_table_body');
+                        tbody.innerHTML = '';
+                        var loadTr = document.createElement('tr');
+                        var loadTd = document.createElement('td');
+                        loadTd.colSpan = 16;
+                        loadTd.className = 'tcg-loading';
+                        loadTd.textContent = 'Loading...';
+                        loadTr.appendChild(loadTd);
+                        tbody.appendChild(loadTr);
+                        var catVals = getMultiSelectValues('tcg_ms_category');
+                        var categoryId = null;
+                        if (catVals.length === 1 &amp;&amp; catVals[0] !== '') {
+                            categoryId = catVals[0];
+                        } else if (catVals.length &gt; 1) {
+                            var specific = catVals.filter(function(v) { return v !== ''; });
+                            if (specific.length &gt; 0) categoryId = specific;
+                        }
+                        var nameSearch = document.getElementById('tcg_search_name').value.trim();
+                        var barcodeSearch = document.getElementById('tcg_search_barcode').value.trim();
+                        rpc('/tcg/margin/get_products', {
+                            category_id: categoryId,
+                            cost_filter: getMultiSelectValues('tcg_ms_cost'),
+                            price_filter: getMultiSelectValues('tcg_ms_price'),
+                            comp_price_filter: getMultiSelectValues('tcg_ms_comp_price'),
+                            sales_filter: getMultiSelectValues('tcg_ms_sales'),
+                            stock_filter: getMultiSelectValues('tcg_ms_stock'),
+                            margin_filter: getMultiSelectValues('tcg_ms_margin'),
+                            name_search: nameSearch,
+                            barcode_search: barcodeSearch,
+                            sort_field: currentSort.field,
+                            sort_order: currentSort.order,
+                            page: currentPage,
+                            limit: pageSize,
+                        }).then(function(result) {
+                            if (reqId !== loadRequestId) return;
+                            if (result &amp;&amp; result.products) {
+                                totalItems = result.total || 0;
+                                var pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+                                var countLabel = document.getElementById('tcg_count_label');
+                                countLabel.innerHTML = '';
+                                countLabel.appendChild(document.createTextNode('Showing '));
+                                var b = document.createElement('b');
+                                b.textContent = totalItems;
+                                countLabel.appendChild(b);
+                                countLabel.appendChild(document.createTextNode(' products'));
+                                renderTable(result.products);
+                                renderPagination(result.page, pageCount, totalItems);
+                                updateSortHeaders();
+                            } else {
+                                tbody.innerHTML = '';
+                                var errTr = document.createElement('tr');
+                                var errTd = document.createElement('td');
+                                errTd.colSpan = 16;
+                                errTd.className = 'tcg-empty';
+                                errTd.textContent = 'Failed to load products';
+                                errTr.appendChild(errTd);
+                                tbody.appendChild(errTr);
+                            }
+                        }).catch(function() {
+                            if (reqId !== loadRequestId) return;
+                            tbody.innerHTML = '';
+                            var netTr = document.createElement('tr');
+                            var netTd = document.createElement('td');
+                            netTd.colSpan = 16;
+                            netTd.className = 'tcg-empty';
+                            netTd.textContent = 'Network error';
+                            netTr.appendChild(netTd);
+                            tbody.appendChild(netTr);
+                        });
+                    }
+
+                    loadCategories();
+                    loadProducts();
+                </script>
+            </t>
+        </t>
+    </template>
+
+</odoo>

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <data noupdate="1">
+        <record id="seq_tcg_consignment_settlement" model="ir.sequence">
+            <field name="name">Consignment Settlement</field>
+            <field name="code">tcg.consignment.settlement</field>
+            <field name="prefix">CS/</field>
+            <field name="padding">4</field>
+            <field name="number_increment">1</field>
+        </record>
+    </data>
+
+    <record id="view_tcg_consignment_settlement_tree" model="ir.ui.view">
+        <field name="name">tcg.consignment.settlement.tree</field>
+        <field name="model">tcg.consignment.settlement</field>
+        <field name="arch" type="xml">
+            <list string="Consignment Settlements">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="date_to"/>
+                <field name="total_amount"/>
+                <field name="state" widget="badge"
+                       decoration-info="state == 'draft'"
+                       decoration-warning="state == 'invoiced'"
+                       decoration-success="state == 'paid'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tcg_consignment_settlement_form" model="ir.ui.view">
+        <field name="name">tcg.consignment.settlement.form</field>
+        <field name="model">tcg.consignment.settlement</field>
+        <field name="arch" type="xml">
+            <form string="Consignment Settlement">
+                <header>
+                    <button name="action_create_invoice"
+                            string="Create Invoice"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state != 'draft' or not line_ids"
+                            confirm="This will create and post a vendor bill. Continue?"/>
+                    <button name="action_view_invoice"
+                            string="View Invoice"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state == 'draft' or not invoice_id"/>
+                    <button name="action_mark_paid"
+                            string="Mark as Paid"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="state != 'invoiced'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,invoiced,paid"/>
+                </header>
+                <sheet>
+                    <group>
+                        <field name="name" readonly="1"/>
+                        <field name="partner_id"
+                               placeholder="Select consignment owner..."/>
+                        <field name="date_from"/>
+                        <field name="date_to"/>
+                        <field name="total_amount" widget="monetary"/>
+                        <field name="invoice_id" invisible="not invoice_id"/>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                    </group>
+                    <notebook>
+                        <page string="Settlement Lines" name="lines">
+                            <field name="line_ids">
+                                <list editable="bottom" create="0" delete="0">
+                                    <field name="product_id"/>
+                                    <field name="product_name"/>
+                                    <field name="qty"/>
+                                    <field name="sale_price"/>
+                                    <field name="cost_price"/>
+                                    <field name="settlement_amount"/>
+                                    <field name="sale_reference"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_tcg_consignment_settlement_search" model="ir.ui.view">
+        <field name="name">tcg.consignment.settlement.search</field>
+        <field name="model">tcg.consignment.settlement</field>
+        <field name="arch" type="xml">
+            <search string="Search Settlements">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <separator/>
+                <filter name="filter_draft" string="Draft"
+                        domain="[('state', '=', 'draft')]"/>
+                <filter name="filter_invoiced" string="Invoiced"
+                        domain="[('state', '=', 'invoiced')]"/>
+                <filter name="filter_paid" string="Paid"
+                        domain="[('state', '=', 'paid')]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter name="group_partner" string="Owner"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_state" string="State"
+                            context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_tcg_consignment_settlement" model="ir.actions.act_window">
+        <field name="name">Consignment Settlements</field>
+        <field name="res_model">tcg.consignment.settlement</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_tcg_consignment_settlement_search"/>
+        <field name="context">{'group_by': ['partner_id']}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No consignment settlements yet.
+            </p>
+            <p>
+                Create a settlement to invoice consignment owners for their sold items.
+            </p>
+        </field>
+    </record>
+
+    <record id="action_tcg_consignment_stock" model="ir.actions.act_window">
+        <field name="name">Consignment Stock</field>
+        <field name="res_model">tcg.consignment.overview</field>
+        <field name="view_mode">list</field>
+        <field name="target">fullscreen</field>
+        <field name="context">{'search_default_partner_id': 1, 'group_by': ['partner_id']}</field>
+    </record>
+
+    <record id="view_tcg_consignment_overview_tree" model="ir.ui.view">
+        <field name="name">tcg.consignment.overview.tree</field>
+        <field name="model">tcg.consignment.overview</field>
+        <field name="arch" type="xml">
+            <list string="Consignment Overview" default_order="partner_id, product_id">
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="category_id"/>
+                <field name="location_id"/>
+                <field name="received_qty"/>
+                <field name="sold_qty"/>
+                <field name="in_stock_qty"/>
+                <field name="cost_price"/>
+                <field name="total_settlement"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_tcg_consignment_overview_search" model="ir.ui.view">
+        <field name="name">tcg.consignment.overview.search</field>
+        <field name="model">tcg.consignment.overview</field>
+        <field name="arch" type="xml">
+            <search string="Search Consignment Stock">
+                <field name="partner_id"/>
+                <field name="product_id"/>
+                <field name="category_id"/>
+                <group expand="1" string="Group By">
+                    <filter name="group_partner" string="Owner" context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_category" string="Category" context="{'group_by': 'category_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_tcg_consignment_stock_by_owner" model="ir.actions.server">
+        <field name="name">Consignment Stock by Owner</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">partner_id = env.context.get('active_id') or (env.context.get('active_ids') or [0])[0]
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Consignment Stock',
+    'res_model': 'tcg.consignment.overview',
+    'view_mode': 'list',
+    'target': 'fullscreen',
+    'context': {'search_default_partner_id': partner_id, 'group_by': ['partner_id']},
+}</field>
+    </record>
+
+    <record id="action_tcg_consignment_settlement_by_partner" model="ir.actions.server">
+        <field name="name">Settlements by Partner</field>
+        <field name="model_id" ref="base.model_res_partner"/>
+        <field name="state">code</field>
+        <field name="code">partner_id = env.context.get('active_id') or (env.context.get('active_ids') or [0])[0]
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Consignment Settlements',
+    'res_model': 'tcg.consignment.settlement',
+    'view_mode': 'list,form',
+    'search_view_id': env.ref('supertcg_products.view_tcg_consignment_settlement_search').id,
+    'context': {'search_default_partner_id': partner_id},
+}</field>
+    </record>
+
+</odoo>

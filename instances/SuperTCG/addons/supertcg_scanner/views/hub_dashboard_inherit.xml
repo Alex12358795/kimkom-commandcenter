@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- Inherit SuperTCG Hub Dashboard — add Scanner section          -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <template id="tcg_hub_dashboard_inherit_scanner" inherit_id="supertcg_products.tcg_hub_dashboard">
+        <xpath expr="//div[hasclass('tcg-hub-body')]" position="inside">
+            <!-- Scanner Section -->
+            <div class="tcg-hub-section">
+                <div class="tcg-hub-section-title">Scanner</div>
+                <a href="/web#action=supertcg_scanner.action_supertcg_batch&amp;view_type=list" class="tcg-hub-card">
+                    <div class="tcg-hub-card-icon purple">&#128247;</div>
+                    <div class="tcg-hub-card-content">
+                        <div class="tcg-hub-card-title">Scanner Batches</div>
+                        <div class="tcg-hub-card-desc">Review scanned card batches, add to inventory or print buylists</div>
+                    </div>
+                    <div class="tcg-hub-card-arrow">&#8250;</div>
+                </a>
+            </div>
+        </xpath>
+    </template>
+
+</odoo>

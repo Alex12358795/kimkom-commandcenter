@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<odoo>
+    <record id="assets_frontend_js" model="ir.asset">
+        <field name="name">SuperTCG Logistics Quantity Limit JS</field>
+        <field name="bundle">web.assets_frontend</field>
+        <field name="path">supertcg_logistics/static/src/js/quantity_limit.js</field>
+    </record>
+</odoo>

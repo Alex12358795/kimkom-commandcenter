@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <template id="tcg_consignment_dashboard" name="TCG Consignment Dashboard">
+        <t t-call="web.html_container">
+            <t t-call="web.layout">
+                <t t-set="head">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+                    <style>
+                        body, #wrapwrap, .oe_structure, main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }
+                        * { box-sizing: border-box; }
+                        body { margin: 0; padding: 0; background: #f5f5f5; -webkit-font-smoothing: antialiased; }
+                        .tcg-dash { width: 100%; max-width: 600px; margin: 0 auto; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+                        .tcg-dash-header { display: flex; align-items: center; padding: 12px 16px; background: #5b8c5a; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                        .tcg-dash-header-back { color: white; text-decoration: none; font-size: 20px; margin-right: 8px; display: flex; align-items: center; }
+                        .tcg-dash-header-title { flex: 1; font-size: 18px; font-weight: 600; }
+                        .tcg-dash-body { padding: 16px; }
+                        .tcg-dash-title { font-size: 24px; color: #5b8c5a; margin: 0 0 4px 0; }
+                        .tcg-dash-subtitle { color: #666; font-size: 14px; margin: 0 0 24px 0; }
+
+                        .tcg-owner-card { background: white; border-radius: 12px; border: 1px solid #e5e5e5; margin-bottom: 12px; overflow: hidden; }
+                        .tcg-owner-header { display: flex; align-items: center; padding: 14px 16px; }
+                        .tcg-owner-link { display: flex; align-items: center; flex: 1; min-width: 0; text-decoration: none; color: inherit; cursor: pointer; border-radius: 8px; margin: -6px; padding: 6px; transition: background 0.2s; }
+                        .tcg-owner-link:hover { background: #f0f5f0; }
+                        .tcg-owner-avatar { width: 40px; height: 40px; border-radius: 50%; background: #5b8c5a; color: white; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; margin-right: 12px; flex-shrink: 0; }
+                        .tcg-owner-info { flex: 1; min-width: 0; }
+                        .tcg-owner-name { font-size: 16px; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                        .tcg-owner-summary { font-size: 13px; color: #666; margin-top: 2px; }
+                        .tcg-owner-stats { display: flex; gap: 0; text-align: center; border-top: 1px solid #f0f0f0; }
+                        .tcg-owner-stat { flex: 1; padding: 10px 8px; border-right: 1px solid #f0f0f0; }
+                        .tcg-owner-stat:last-child { border-right: none; }
+                        .tcg-owner-stat-value { font-size: 18px; font-weight: 700; color: #333; }
+                        .tcg-owner-stat-value.green { color: #5b8c5a; }
+                        .tcg-owner-stat-value.orange { color: #e67e22; }
+                        .tcg-owner-stat-label { font-size: 11px; color: #999; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+                        .tcg-owner-actions { padding: 12px 16px; border-top: 1px solid #f0f0f0; display: flex; gap: 8px; }
+                        .tcg-btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; text-decoration: none; transition: background 0.2s; }
+                        .tcg-btn-primary { background: #5b8c5a; color: white; }
+                        .tcg-btn-primary:hover { background: #4d7a4d; }
+                        .tcg-btn-secondary { background: #f0f0f0; color: #333; }
+                        .tcg-btn-secondary:hover { background: #e0e0e0; }
+                        .tcg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+                        .tcg-btn-loading { pointer-events: none; opacity: 0.7; }
+
+                        .tcg-empty { text-align: center; padding: 40px 20px; color: #999; }
+                        .tcg-empty-icon { font-size: 48px; margin-bottom: 12px; }
+                        .tcg-empty-text { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: #666; }
+                        .tcg-empty-desc { font-size: 13px; line-height: 1.5; }
+
+                        .tcg-log { margin-top: 32px; }
+                        .tcg-log-title { font-size: 18px; font-weight: 600; color: #5b8c5a; margin-bottom: 12px; }
+                        .tcg-log-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 8px; text-decoration: none; color: inherit; transition: box-shadow 0.2s; }
+                        .tcg-log-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+                        .tcg-log-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; color: white; white-space: nowrap; }
+                        .tcg-log-badge.draft { background: #17a2b8; }
+                        .tcg-log-badge.invoiced { background: #e67e22; }
+                        .tcg-log-badge.paid { background: #5b8c5a; }
+                        .tcg-log-info { flex: 1; min-width: 0; }
+                        .tcg-log-name { font-weight: 600; font-size: 14px; color: #333; }
+                        .tcg-log-detail { font-size: 12px; color: #666; margin-top: 2px; }
+                        .tcg-log-amount { font-size: 14px; font-weight: 700; color: #333; }
+
+                        @media (max-width: 600px) {
+                            .tcg-dash { max-width: 100%; }
+                            .tcg-dash-body { padding: 12px; }
+                            .tcg-dash-title { font-size: 20px; }
+                            .tcg-owner-stat-value { font-size: 16px; }
+                        }
+                    </style>
+                </t>
+                <div class="tcg-dash">
+                    <div class="tcg-dash-header">
+                        <a href="/odoo" class="tcg-dash-header-back" aria-label="Back">&#8592;</a>
+                        <img src="/supertcg_products/static/src/img/header_logo.png" style="height:28px; margin-right:10px;" alt="SuperTCG"/>
+                        <div class="tcg-dash-header-title">Consignment Settlements</div>
+                    </div>
+
+                    <div class="tcg-dash-body">
+                        <h1 class="tcg-dash-title">Consignments</h1>
+                        <p class="tcg-dash-subtitle">Overview of consignment partners and sold items</p>
+
+                        <!-- Owner Cards -->
+                        <div id="tcg_owners_list">
+                            <t t-if="not owners">
+                                <div class="tcg-empty">
+                                    <div class="tcg-empty-icon">&#x1F91D;</div>
+                                    <div class="tcg-empty-text">No consignment partners found</div>
+                                    <div class="tcg-empty-desc">Add consignment stock via Losse kaarten to see partners here.</div>
+                                </div>
+                            </t>
+                            <t t-foreach="owners" t-as="owner">
+                                <div class="tcg-owner-card">
+                                    <a t-att-href="'/web#action=%d&amp;id=%d&amp;model=res.partner' % (stock_by_owner_action_id, owner['id'])"
+                                       class="tcg-owner-link">
+                                        <div class="tcg-owner-avatar"><t t-esc="owner['initial']"/></div>
+                                        <div class="tcg-owner-info">
+                                            <div class="tcg-owner-name"><t t-esc="owner['name']"/></div>
+                                            <div class="tcg-owner-summary"><t t-esc="owner['summary']"/></div>
+                                        </div>
+                                    </a>
+                                    <div class="tcg-owner-stats">
+                                        <div class="tcg-owner-stat">
+                                            <div class="tcg-owner-stat-value green"><t t-esc="owner['in_stock']"/></div>
+                                            <div class="tcg-owner-stat-label">In Stock</div>
+                                        </div>
+                                        <div class="tcg-owner-stat">
+                                            <div class="tcg-owner-stat-value orange"><t t-esc="owner['sold']"/></div>
+                                            <div class="tcg-owner-stat-label">Sold</div>
+                                        </div>
+                                        <div class="tcg-owner-stat">
+                                            <div class="tcg-owner-stat-value">&#x20AC;<t t-esc="owner['total_owed']"/></div>
+                                            <div class="tcg-owner-stat-label">Owed</div>
+                                        </div>
+                                    </div>
+                                    <div class="tcg-owner-actions">
+                                        <button class="tcg-btn tcg-btn-primary"
+                                                t-att-disabled="'disabled' if owner['sold'] == 0 else None"
+                                                t-att-data-partner-id="owner['id']"
+                                                onclick="createSettlement(this)">
+                                            Settle Sold Items
+                                        </button>
+                                        <a t-att-href="'/tcg/consignment/print_overview/%d' % owner['id']"
+                                           target="_blank"
+                                           class="tcg-btn tcg-btn-secondary">
+                                            Print Overview
+                                        </a>
+                                        <a t-att-href="'/web#action=%d' % action_id"
+                                           class="tcg-btn tcg-btn-secondary">
+                                            History
+                                        </a>
+                                    </div>
+                                </div>
+                            </t>
+                        </div>
+
+                        <!-- Recent Settlements -->
+                        <t t-if="recent_settlements">
+                            <div class="tcg-log">
+                                <div class="tcg-log-title">Recent Settlements</div>
+                                <t t-foreach="recent_settlements" t-as="s">
+                                    <a t-att-href="'/web#action=%d&amp;id=%d' % (action_id, s['id'])"
+                                       class="tcg-log-item">
+                                        <span class="tcg-log-badge" t-att-class="s['state']">
+                                            <t t-esc="s['state'].capitalize()"/>
+                                        </span>
+                                        <div class="tcg-log-info">
+                                            <div class="tcg-log-name"><t t-esc="s['name']"/></div>
+                                            <div class="tcg-log-detail"><t t-esc="s['partner_name']"/> &amp;middot; <t t-esc="s['date']"/></div>
+                                        </div>
+                                        <div class="tcg-log-amount">&#x20AC;<t t-esc="s['amount']"/></div>
+                                    </a>
+                                </t>
+                            </div>
+                        </t>
+                    </div>
+                </div>
+
+                <script>
+                    function createSettlement(btn) {
+                        var partnerId = btn.getAttribute('data-partner-id');
+                        btn.disabled = true;
+                        btn.textContent = 'Creating...';
+                        btn.classList.add('tcg-btn-loading');
+
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('POST', '/tcg/consignment/create_settlement', true);
+                        xhr.setRequestHeader('Content-Type', 'application/json');
+                        xhr.onload = function() {
+                            if (xhr.status === 200) {
+                                var resp = JSON.parse(xhr.responseText);
+                                if (resp.result &amp;&amp; resp.result.success) {
+                                    window.open(resp.result.url, '_blank');
+                                    btn.textContent = 'Done!';
+                                    setTimeout(function() {
+                                        btn.textContent = 'Settle Sold Items';
+                                        btn.disabled = false;
+                                        btn.classList.remove('tcg-btn-loading');
+                                        location.reload();
+                                    }, 1500);
+                                } else {
+                                    alert(resp.result &amp;&amp; resp.result.error || 'Failed to create settlement.');
+                                    btn.textContent = 'Settle Sold Items';
+                                    btn.disabled = false;
+                                    btn.classList.remove('tcg-btn-loading');
+                                }
+                            } else {
+                                alert('Server error. Please try again.');
+                                btn.textContent = 'Settle Sold Items';
+                                btn.disabled = false;
+                                btn.classList.remove('tcg-btn-loading');
+                            }
+                        };
+                        xhr.onerror = function() {
+                            alert('Network error. Please try again.');
+                            btn.textContent = 'Settle Sold Items';
+                            btn.disabled = false;
+                            btn.classList.remove('tcg-btn-loading');
+                        };
+                        xhr.send(JSON.stringify({jsonrpc: '2.0', method: 'call', params: {partner_id: parseInt(partnerId)}, id: 1}));
+                    }
+                </script>
+            </t>
+        </t>
+    </template>
+
+</odoo>

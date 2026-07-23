@@ -1,0 +1,17 @@
+# HTTPS targets are intentionally file-discovered so site-specific endpoints
+# can be changed without editing prometheus.yml. These routes were validated
+# when added; remove them if this host should not depend on their DNS path.
+- targets:
+    - "https://supertcg.kimkom.net/"
+    - "https://vranckeneers.kimkom.net/"
+    - "https://kimkom-dev.kimkom.net/"
+  labels:
+    environment: "development"
+    owner: "kimkom"
+
+- targets:
+    - "https://kimkom-prod.kimkom.net/"
+  labels:
+    client: "kimkom-prod"
+    environment: "pilot"
+    owner: "kimkom"
