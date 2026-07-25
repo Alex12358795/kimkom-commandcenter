@@ -38,3 +38,4 @@ monitoring/beszel/
 # Backup data (generated)
 backup-repo/
 backup-staging/
+instances/*/addons/kimkom_management_system/
