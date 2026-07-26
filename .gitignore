@@ -46,3 +46,4 @@ monitoring/beszel/
 backup-repo/
 backup-staging/
 instances/*/addons/kimkom_management_system/
+instances/SuperTCG/addons/kimkom_management_system/

@@ -3,7 +3,7 @@ set -euo pipefail
 
 show_help() {
     cat <<EOF
-Usage: $0 [--client <name>] [--admin-pass <pass>] [--dry-run] [--override-capacity --override-reason <reason>]
+Usage: $0 [--client <name>] [--admin-pass <pass>] [--dry-run]
 
 Creates a new isolated Odoo 18 development instance and MCP config.
 Prompts for client name interactively if not provided.
@@ -12,8 +12,6 @@ Options:
   --client      New client name (e.g., "acme") — becomes the subdomain
   --admin-pass  Odoo admin password (default: auto-generated)
   --dry-run     Render and validate files without creating a customer, database, MCP entry, or Docker resources
-  --override-capacity  Permit creation when measured host-capacity thresholds fail
-  --override-reason    Non-empty reason required with --override-capacity (persisted on success)
   --help        Show this message
 
 Examples:
@@ -35,8 +33,6 @@ done
 CLIENT=""
 ADMIN_PASS=""
 DRY_RUN=0
-OVERRIDE_CAPACITY=0
-OVERRIDE_REASON=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -47,26 +43,12 @@ while [ $# -gt 0 ]; do
             [ "$#" -ge 2 ] || { echo "ERROR: --admin-pass requires a value" >&2; exit 1; }
             ADMIN_PASS="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
-        --override-capacity) OVERRIDE_CAPACITY=1; shift ;;
-        --override-reason)
-            [ "$#" -ge 2 ] || { echo "ERROR: --override-reason requires a non-empty value" >&2; exit 1; }
-            OVERRIDE_REASON="$2"; shift 2 ;;
         --help) show_help ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
 
-if [ "$OVERRIDE_CAPACITY" -eq 1 ] && [ -z "$OVERRIDE_REASON" ]; then
-    echo "ERROR: --override-capacity requires a non-empty --override-reason" >&2
-    exit 1
-fi
-if [ "$OVERRIDE_CAPACITY" -eq 0 ] && [ -n "$OVERRIDE_REASON" ]; then
-    echo "ERROR: --override-reason requires --override-capacity" >&2
-    exit 1
-fi
-
-# Validate the client before admission while preserving the legacy-instance
-# guard; validation itself performs no host or instance mutation.
+# Validate the client before any host or instance mutation.
 if [ -z "$CLIENT" ]; then
     read -p "Enter new client name (e.g., acme): " CLIENT
 fi
@@ -79,66 +61,6 @@ fi
 if [[ ! "$CLIENT" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
     echo "ERROR: Client must be a lowercase slug containing letters, digits, and hyphens" >&2
     exit 1
-fi
-
-# Serialize all generators.  This is intentionally acquired before secrets,
-# directories, Docker, PostgreSQL, or MCP can be touched.
-ADMISSION_LOCK="${XDG_RUNTIME_DIR:-/tmp}/kimkom-create-odoo-instance.lock"
-exec 9>"$ADMISSION_LOCK"
-if ! flock -n 9; then
-    echo "ERROR: another instance generator is already running (admission lock: $ADMISSION_LOCK)" >&2
-    exit 1
-fi
-
-CAPACITY_FAILURES=()
-MEM_AVAILABLE_BYTES=0
-SWAP_TOTAL_BYTES=0
-SWAP_USED_BYTES=0
-ROOT_FREE_BYTES=0
-LOAD_1M="unknown"
-CPU_COUNT=0
-
-if [ -r /proc/meminfo ]; then
-    while read -r key value unit; do
-        case "$key" in
-            MemAvailable:) MEM_AVAILABLE_BYTES=$((value * 1024)) ;;
-            SwapTotal:) SWAP_TOTAL_BYTES=$((value * 1024)) ;;
-            SwapFree:) SWAP_FREE_BYTES=$((value * 1024)) ;;
-        esac
-    done < /proc/meminfo
-    SWAP_USED_BYTES=$((SWAP_TOTAL_BYTES - ${SWAP_FREE_BYTES:-0}))
-else
-    CAPACITY_FAILURES+=("MemAvailable and swap usage are not safely observable")
-fi
-ROOT_FREE_BYTES=$(df -Pk / 2>/dev/null | awk 'NR==2 {print $4 * 1024}')
-CPU_COUNT=$(getconf _NPROCESSORS_ONLN 2>/dev/null || true)
-LOAD_1M=$(awk '{print $1}' /proc/loadavg 2>/dev/null || true)
-[[ "$ROOT_FREE_BYTES" =~ ^[0-9]+$ ]] || { ROOT_FREE_BYTES=0; CAPACITY_FAILURES+=("root disk free space is not safely observable"); }
-[[ "$CPU_COUNT" =~ ^[0-9]+$ ]] || { CPU_COUNT=0; CAPACITY_FAILURES+=("logical CPU count is not safely observable"); }
-[[ "$LOAD_1M" =~ ^[0-9]+([.][0-9]+)?$ ]] || { LOAD_1M=0; CAPACITY_FAILURES+=("one-minute load is not safely observable"); }
-
-if [ "$MEM_AVAILABLE_BYTES" -lt $((3 * 1024 * 1024 * 1024)) ]; then
-    CAPACITY_FAILURES+=("MemAvailable=${MEM_AVAILABLE_BYTES} bytes (< 3 GiB)")
-fi
-if [ "$SWAP_TOTAL_BYTES" -gt 0 ] && [ $((SWAP_USED_BYTES * 100)) -gt $((SWAP_TOTAL_BYTES * 25)) ]; then
-    CAPACITY_FAILURES+=("swap usage=${SWAP_USED_BYTES}/${SWAP_TOTAL_BYTES} bytes (> 25%)")
-fi
-if [ "$ROOT_FREE_BYTES" -lt $((30 * 1024 * 1024 * 1024)) ]; then
-    CAPACITY_FAILURES+=("root disk free=${ROOT_FREE_BYTES} bytes (< 30 GiB)")
-fi
-if [ "$CPU_COUNT" -gt 0 ] && awk "BEGIN {exit !($LOAD_1M >= ($CPU_COUNT * 0.70))}"; then
-    CAPACITY_FAILURES+=("one-minute load=${LOAD_1M} (>= 70% of ${CPU_COUNT} logical CPUs)")
-fi
-echo "Capacity admission measurements: MemAvailable=${MEM_AVAILABLE_BYTES} bytes; swap=${SWAP_USED_BYTES}/${SWAP_TOTAL_BYTES} bytes; root_free=${ROOT_FREE_BYTES} bytes; load1=${LOAD_1M}; logical_cpus=${CPU_COUNT}"
-if [ "${#CAPACITY_FAILURES[@]}" -gt 0 ] && [ "$OVERRIDE_CAPACITY" -eq 0 ]; then
-    echo "CAPACITY DECISION: DENY (use --override-capacity --override-reason <nonempty> only after review)" >&2
-    printf '  - %s\n' "${CAPACITY_FAILURES[@]}" >&2
-    exit 1
-fi
-if [ "$OVERRIDE_CAPACITY" -eq 1 ]; then
-    echo "CAPACITY DECISION: ALLOW WITH OVERRIDE: $OVERRIDE_REASON"
-else
-    echo "CAPACITY DECISION: ALLOW"
 fi
 
 if [ -d "/opt/kimkom-commandcenter/instances/$CLIENT" ]; then
@@ -364,22 +286,18 @@ PY
 echo "Starting Odoo container..."
 docker compose -f "$INSTANCE_DIR/docker-compose.yml" --env-file "$INSTANCE_DIR/.env" up -d
 
-# Record admission provenance only after the real instance has been started.
-# The file contains no credentials and makes capacity overrides auditable.
-python3 - "$INSTANCE_DIR/instance-metadata.json" "$CLIENT" "$OVERRIDE_CAPACITY" "$OVERRIDE_REASON" <<'PY'
+# Record instance metadata (no credentials)
+python3 - "$INSTANCE_DIR/instance-metadata.json" "$CLIENT" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 
-path, client, overridden, reason = sys.argv[1:]
+path, client = sys.argv[1:]
 metadata = {
     "client": client,
     "environment": "development",
-    "capacity_override": overridden == "1",
     "created_at": datetime.now(timezone.utc).isoformat(),
 }
-if overridden == "1":
-    metadata["capacity_override_reason"] = reason
 with open(path, "w", encoding="utf-8") as handle:
     json.dump(metadata, handle, indent=2)
     handle.write("\n")

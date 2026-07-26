@@ -73,70 +73,13 @@ separately through the module workflow under
 configured `KIMKOM_MODULES_ROOT`). It never clones source. The generated Odoo
 containers mount these client and shared paths read-only.
 
-### Phase 3 Lane E contract (clean customers)
+### Dev instance creation
 
-The clean-customer path is separate from the legacy SuperTCG, Vranckeneers, and
-kimkom-dev instances and from the Phase 1/2 production notes below:
-
-- `operations/customers.json` is the local, secret-free inventory. It contains
-  references such as `secrets/customer-ops/<slug>/glitchtip-dsn`; the private
-  DSN value is stored in that file with restrictive permissions, never in the
-  JSON inventory or generated target files.
-- `scripts/customer-ops.py` is the idempotent lifecycle entry point. It
-  reserves customers, activates development or production records, accepts an
-  observed Portainer endpoint, and reconciles managed file-SD targets.
-  Generated targets live under `monitoring/prometheus/targets/managed/` and
-  `monitoring/blackbox/targets/managed/`; never append targets manually to
-  hand-managed YAML files.
-- Portainer remains `pending` until an operator observes the endpoint in
-  Portainer and records its accepted endpoint ID/reference. Enrollment is
-  manual; do not claim an endpoint is enrolled merely because a server exists.
-- Grafana's generic **KimKom – Customer Overview** selects by `client` labels.
-  Its backup panels use `kimkom_backup_v2_backup_last_run_success`,
-  `kimkom_backup_v2_verify_last_run_success`, and the corresponding
-  `*_last_success_timestamp_seconds` age metrics. Alertmanager groups customer
-  context centrally; it does not create a separate per-customer route.
-- The clean new-dev generator applies these admission defaults: at least 3 GiB
-  available memory, no more than 25% swap used when swap exists, at least 30
-  GiB root free space, and one-minute load below 70% of logical CPU capacity.
-  The current host is denied by these measured thresholds. An operator may
-  proceed only with the explicit `--override-capacity --override-reason "..."`
-  option; the nonempty reason is recorded in instance metadata. Generated Odoo is low-concurrency and
-  resource-limited (`workers=0`, one cron thread, 0.75 CPU, 768 MiB reserved,
-  1280 MiB limit) and its dedicated PostgreSQL role has `CONNECTION LIMIT 10`.
-- This lane has no Kubernetes or PITR scope. Existing legacy instances are not
-  modified.
-
-#### Phase 3 operator commands
-
-Run from `/opt/kimkom-commandcenter`:
-
-```bash
-# Validate/reconcile the local inventory and managed files
-python3 scripts/customer-ops.py reconcile
-
-# Reserve a customer (add --dry-run when GlitchTip is unavailable)
-python3 scripts/customer-ops.py reserve <slug> --name "Customer Name"
-
-# Generate a clean development instance; this host currently fails admission
-./scripts/create-odoo-instance.sh --client <slug>
-
-# Explicit, reviewed exception to admission (record a real reason)
-./scripts/create-odoo-instance.sh --client <slug> \
-  --override-capacity --override-reason "ticket/approval and rationale"
-
-# Accept only an endpoint ID/reference observed in Portainer
-python3 scripts/customer-ops.py accept-portainer <slug> --endpoint-ref <observed-id>
-```
-
-Deterministic Phase 3 validation covers schema/secret-free inventory checks,
-idempotent lifecycle behavior, generated target shape and labels, admission
-threshold decisions, resource limits, DB connection limit, and the absence of
-legacy/Kubernetes/PITR changes. Phase 4 live validation is separate: observe
-running containers, actual Prometheus target health, Grafana queries,
-Alertmanager grouping/delivery, GlitchTip events, Portainer's accepted endpoint,
-and backup/restore evidence. Do not describe deterministic checks as live
-production validation.
+New dev instances are created with `create-odoo-instance.sh`. It validates the
+client slug, creates a dedicated PostgreSQL role/database, generates
+docker-compose.yml with read-only module mounts and resource limits, and starts
+Odoo. Generated defaults: workers=0, one cron thread, 0.75 CPU, 1280 MiB memory
+limit, PostgreSQL CONNECTION LIMIT 10.
 
 ### 2.1 Create the instance
 
@@ -186,14 +129,14 @@ public_hostname: acme.kimkom.net → http://192.168.178.19:80
 
 ### 2.5 Reserve GlitchTip project
 
-For a clean customer, run `customer-ops reserve` as described in Section 6.5.
+For a clean customer, run the provisioning script as described in Section 6.5.
 It owns project creation and the protected DSN reference; there is no separate
 manual GlitchTip connection or DSN-copy procedure.
 
 ### 2.6 Dependency modules (if needed)
 
 For the clean new-customer path, record each dependency as an explicit selected
-module name, source, and 40-character source commit in the schema-v3 manifest.
+module name, source, and 40-character source commit in the simple manifest.
 The client/shared workspace model is direct source under
 `/opt/kimkom-modules/<client-slug>/` and `/opt/kimkom-modules/shared/`; do not
 copy custom modules into an instance-local `addons/` tree. The existing
@@ -318,7 +261,7 @@ git push origin main
 
 ### 4.6 Update the client manifest (if new OCA/Enterprise deps)
 
-Use this schema-v3 shape in `/opt/KimKom-stack/clients/<client-slug>.yml`:
+Use this simple shape in `/opt/KimKom-stack/clients/<client-slug>.yml`:
 
 ```json
 {
@@ -371,7 +314,7 @@ git push origin main
 ### 4.7 Verify CI
 
 CI is required to:
-1. Validate schema-v3 manifests and the per-client image matrix
+1. Validate simple manifests and the per-client image matrix
 2. Fetch direct workspace/dependency sources at their 40-character commits
 3. Build the client image once, then fresh-install/test the selected modules
    on that same image and cold-start it
@@ -401,7 +344,7 @@ reviewed mapping from that source to a protected environment secret.
 
 ### 5.1 How it works
 
-1. Validate schema-v3 manifests and the client image matrix.
+1. Validate simple manifests and the client image matrix.
 2. For each client, fetch sources at recorded 40-character commits, selecting
    exact module names only.
 3. Build the client image once, then fresh-install/test modules on that same
@@ -460,7 +403,7 @@ Before running any commands, collect these:
 | S3 access key + secret (for backups) | Yes | Create via Hetzner Cloud Console → Object Storage → Credentials |
 | Tailscale auth key | **Recommended** | https://login.tailscale.com/admin/settings/keys (one-time key) |
 | Odoo image digest | Yes | From CI pipeline (see Section 5.3) — `ghcr.io/alex12358795/<slug>-odoo@sha256:...` |
-| GlitchTip reservation | Yes for clean customers | `customer-ops reserve` owns project creation and the private DSN reference/file |
+| GlitchTip reservation | Yes for clean customers | the provisioning script owns project creation and the private DSN reference/file |
 | Module manifest | Yes | `clients/<slug>.yml` in KimKom-stack (see Section 6.1 below) |
 | Modules ready in kimkom-modules repo | Yes | All customer + shared modules pushed to GitHub |
 | Backup credentials | Yes | Dedicated S3 key/secret and Restic password through the approved secret input path |
@@ -547,7 +490,7 @@ Create `/opt/KimKom-stack/clients/<client-slug>.yml`:
 **IMPORTANT:** Every selected module source must use an exact lowercase
 40-character commit SHA and a canonical `owner/repository` ID. Do not use
 URLs, mutable refs, or implicit repository-wide selection. Use only the
-schema-v3 `internal`, `enterprise`, and `sources` keys with technical module
+simple `internal`, `enterprise`, and `sources` keys with technical module
 lists. The `<git-sha>` image tag is replaced by CI with the commit SHA.
 
 Validate the manifest:
@@ -602,17 +545,16 @@ ssh -i /opt/kimkom-commandcenter/ssh/deploy_key root@<VPS_IP> 'echo OK'
 
 ### 6.5 Reserve the customer (Phase 3, non-mutating when dry-run)
 
-`customer-ops reserve` owns GlitchTip project creation and stores only a private
-DSN reference in `operations/customers.json`. Do not create a project, retrieve
+the provisioning script owns GlitchTip project creation and stores only a private
+DSN reference in `the instance .env`. Do not create a project, retrieve
 a DSN, or copy a DSN manually. For a static check, use a temporary inventory
 checkout and `--dry-run`; do not point the command at the live inventory.
 
 ```bash
 tmp=$(mktemp -d)
 mkdir -p "$tmp/operations" "$tmp/scripts"
-cp operations/customers.example.json "$tmp/operations/customers.json"
-cp scripts/customer-ops.py "$tmp/scripts/customer-ops.py"
-(cd "$tmp" && python3 scripts/customer-ops.py reserve newco --name "Newco Test" --dry-run)
+cp .env.example "$tmp/the instance .env"
+(cd "$tmp" &&  newco --name "Newco Test" --dry-run)
 rm -rf "$tmp"
 ```
 
@@ -624,9 +566,9 @@ state cases below without SSH or live-state writes.
 ### 6.6 Phase 3 static/mock checklist (non-mutating)
 
 Use only the fixed example inventory
-`/opt/kimkom-commandcenter/operations/customers.example.json` or a temporary
+`/opt/kimkom-commandcenter/.env.example` or a temporary
 copy of an empty `{"schema_version":1,"customers":{}}` file. Never use the
-live untracked `operations/customers.json` for a temporary example. The ten
+live untracked `the instance .env` for a temporary example. The ten
 inventory contract checks are isolated by `tests/test_customer_ops.py` (currently
 14 unittest cases) and must pass without changing inventory, secrets, or managed
 targets:
@@ -646,8 +588,7 @@ temporary directories.
 Run the remaining deterministic checks:
 
 ```bash
-python3 -c 'from pathlib import Path; compile(Path("scripts/customer-ops.py").read_text(), "scripts/customer-ops.py", "exec")'
-python3 -m json.tool operations/customers.example.json >/dev/null
+python3 -m json.tool .env.example >/dev/null
 ./scripts/test-generate-alertmanager-config.sh
 if command -v promtool >/dev/null 2>&1; then
   promtool check config monitoring/prometheus.yml
@@ -672,7 +613,7 @@ print("dashboard JSON parse: PASS")
 PY
 ./scripts/create-odoo-instance.sh --client acme --dry-run
 ./scripts/create-odoo-instance.sh --client acme --dry-run \
-  --override-capacity --override-reason "documentation fixture only"
+  -- -- "documentation fixture only"
 /opt/KimKom-stack/tests/test-init-client-documentation.sh
 git diff --check -- SOP.md AGENTS.md README.md
 git diff --name-only -- AGENTS.md SOP.md README.md
@@ -692,19 +633,17 @@ follow-up startup command belongs in this runbook. No clean-flow `sentry-sdk`
 installation or legacy-source copy is assumed.
 
 For the reservation-specific dry-run, copy the fixed example inventory and the
-customer-ops script into a temporary checkout, then reserve a new example slug:
 
 ```bash
 tmp=$(mktemp -d)
 mkdir -p "$tmp/operations" "$tmp/scripts"
-cp operations/customers.example.json "$tmp/operations/customers.json"
-cp scripts/customer-ops.py "$tmp/scripts/customer-ops.py"
-(cd "$tmp" && python3 scripts/customer-ops.py reserve newco --name "Newco Test" --dry-run)
+cp .env.example "$tmp/the instance .env"
+(cd "$tmp" &&  newco --name "Newco Test" --dry-run)
 rm -rf "$tmp"
 ```
 
 Expected: `ok: reserve`; no live GlitchTip project, database, inventory, or
-managed-target file is created. `customer-ops reconcile` is reserved for live
+managed-target file is created. Prometheus target files is reserved for live
 onboarding or a disposable copied checkout because it regenerates managed
 target files.
 
@@ -769,7 +708,7 @@ requires all of: server/IP, client name and slug, domain, immutable Odoo image,
 dedicated backup S3 key/secret, non-secret backup escrow reference, production
 SSH access key, and—when applicable—the distinct private-clone deploy key.
 Tailscale and optional profile credentials are also required when those options
-are selected. Clean production onboarding runs `customer-ops reserve` and the
+are selected. Clean production onboarding runs the provisioning script and the
 managed-target reconciliation as part of the onboarding contract; Portainer
 remains manual until its observed endpoint reference is accepted.
 
@@ -785,14 +724,14 @@ resume is rejected, and a resume with a mismatched SHA is rejected.
    the UI/API; an address alone is not acceptance evidence.
 2. Record the observed ID in the local inventory:
 ```bash
-python3 scripts/customer-ops.py accept-portainer <slug> --endpoint-ref <observed-id>
+ <slug> --endpoint-ref <observed-id>
 ```
 3. Query and verify status:
 ```bash
 python3 - <<'PY'
 import json
 from pathlib import Path
-c = json.loads(Path('operations/customers.json').read_text())['customers']['<slug>']
+c = json.loads(Path('the instance .env').read_text())['customers']['<slug>']
 assert c['portainer']['status'] == 'accepted'
 assert c['portainer']['endpoint_ref'] == '<observed-id>'
 print('Portainer inventory status: accepted')
@@ -974,7 +913,7 @@ Docker/PostgreSQL/Restic recovery.
 
 ## 11. GlitchTip ownership
 
-For clean Phase 3 customers, `python3 scripts/customer-ops.py reserve` owns
+For clean Phase 3 customers, `` owns
 project creation and the private DSN reference/file. Do not create projects,
 retrieve DSNs, copy DSNs from legacy instances, or add a manual sentry module
 or startup step to the clean flow. Live GlitchTip delivery is a Phase 4 TEST-VM
@@ -1033,11 +972,11 @@ customer. Record the customer and targets in the local inventory, then let the
 idempotent reconciler generate managed file-SD JSON:
 
 ```bash
-python3 scripts/customer-ops.py activate-production <slug> --name "Customer Name" \
+ <slug> --name "Customer Name" \
   --domain <domain> --management-target <tailscale-ip>:9001 \
   --node-target <tailscale-ip>:9100 --postgres-target <tailscale-ip>:9187 \
   --http-target http://<domain> --https-target https://<domain>
-python3 scripts/customer-ops.py reconcile
+
 ```
 
 Prometheus live health is a Phase 4 validation; the command succeeding only

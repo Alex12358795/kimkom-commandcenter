@@ -12,7 +12,7 @@ Central control plane for KimKom agency. Dev environments, monitoring, error tra
 **Repos** (all private, on GitHub as Alex12358795):
 - `kimkom-commandcenter` — this repo: dev instances, monitoring, GlitchTip, backup, dashboards
 - `KimKom-stack` — production stack: init-client.sh, update.sh, backup-v2, Dockerfile, CI
-- `kimkom-modules` — shared and per-client Odoo modules (4-tier model)
+- `kimkom-modules` — shared and per-client Odoo modules (2-tier model)
 
 ## Directory Layout
 
@@ -25,7 +25,7 @@ Central control plane for KimKom agency. Dev environments, monitoring, error tra
       docker-compose.yml           # Odoo 18 container with Traefik labels
       Dockerfile                    # generator-defined dependencies (not a sentry-sdk guarantee)
       config/odoo.conf              # clean config; legacy instances may contain sentry_dsn (not committed)
-      .env                          # DB_PASSWORD, ODOO_ADMIN_PASSWORD (not committed; clean DSN is a customer-ops reference)
+      .env                          # DB_PASSWORD, ODOO_ADMIN_PASSWORD (not committed)
       addons/                       # legacy instance-local tree; unsupported for new clients
       addons-enterprise/            # Odoo Enterprise (not committed)
       addons-oca/                   # OCA community modules; legacy sentry content is not a clean-flow dependency
@@ -39,7 +39,7 @@ Central control plane for KimKom agency. Dev environments, monitoring, error tra
     alertmanager/alertmanager.yml   # generated runtime config (untracked, mode 0644)
     alertmanager/alertmanager.yml.template  # template with __TELEGRAM_BOT_TOKEN__ placeholder (committed)
     grafana/provisioning/
-      dashboards/                   # 4 dashboards: customer-overview, node-exporter, postgresql, backup-v2
+      dashboards/                   # 3 dashboards: node-exporter, postgresql, backup-v2
       datasources/                  # Prometheus (PBFA97CFB590B2093), Alertmanager, Loki
     grafana/data/                   # chown 472:472
     promtail/promtail.yml           # Docker container log scraping config
@@ -81,8 +81,7 @@ Central control plane for KimKom agency. Dev environments, monitoring, error tra
   scripts/backup-v2/                 # backup, retention, check, verify-restore
   systemd/                           # backup timers (backup, retention, check, verify)
   lib/client-config.sh               # shared validation functions
-  scripts/ci/                        # manifest validation, CI helpers
-  .github/workflows/immutable-image.yml  # CI: validate → test-modules → build → scan → push
+  .github/workflows/immutable-image.yml  # CI: build → push to GHCR
 
 /opt/kimkom-modules/                 # Module repository (separate GitHub repo)
   shared/                            # modules shared across all KimKom clients
@@ -105,69 +104,16 @@ only via CI-built images; there is no direct rsync-to-production workflow.
 SuperTCG, Vranckeneers, and kimkom-dev instance-local trees are legacy and must
 retain their current mounts; Phase 1 does not migrate them.
 
-## Phase 3 Lane E — clean-customer contract
+## Module Repository Model (2-Tier)
 
-This lane does not modify SuperTCG, Vranckeneers, or kimkom-dev and has no
-Kubernetes or PITR scope. `operations/customers.json` is a local, secret-free
-inventory: GlitchTip DSNs are referenced as
-`secrets/customer-ops/<slug>/glitchtip-dsn`, while the private values remain in
-those protected files. `scripts/customer-ops.py` is the idempotent lifecycle
-and reconciliation entry point. It generates managed Prometheus/Blackbox file-
-SD JSON under `monitoring/*/targets/managed/`; never append customer targets to
-hand-managed YAML.
+| Tier | Source | Per-instance? |
+|---|---|---|
+| Client | `/opt/kimkom-modules/<client-slug>/` | Only that client |
+| Shared | `/opt/kimkom-modules/shared/` | Available to all clients |
 
-Portainer is manual and remains `pending` until an operator observes and accepts
-the endpoint ID/reference. The generic Grafana Customer Overview uses `client`
-labels and the backup metrics
-`kimkom_backup_v2_backup_last_run_success`,
-`kimkom_backup_v2_verify_last_run_success`, and their corresponding
-`*_last_success_timestamp_seconds` metrics. Alertmanager groups customer
-context centrally, not through per-customer routes.
-
-The clean dev generator admits only hosts with >=3 GiB available memory, <=25%
-swap used when swap exists, >=30 GiB root free, and load below 70% of logical
-CPU capacity. This host currently fails admission. The only explicit exception
-is `--override-capacity --override-reason "..."`, with a nonempty reason
-recorded on success. Generated Odoo is low-concurrency
-and resource-limited (workers 0, one cron thread, 0.75 CPU, 768 MiB reserved,
-1280 MiB limit); its dedicated PostgreSQL role has connection limit 10.
-
-```bash
-python3 scripts/customer-ops.py reserve <slug> --name "Customer Name"
-python3 scripts/customer-ops.py activate-production <slug> --name "Customer Name" --domain <domain> \
-  --management-target <ts-ip>:9001 --node-target <ts-ip>:9100 \
-  --postgres-target <ts-ip>:9187 --http-target http://<domain> \
-  --https-target https://<domain>
-python3 scripts/customer-ops.py reconcile
-python3 scripts/customer-ops.py accept-portainer <slug> --endpoint-ref <observed-id>
-./scripts/create-odoo-instance.sh --client <slug>
-```
-
-Phase 3 deterministic validation means inventory/schema, idempotence, generated
-labels/files, admission, limits, and scope checks. Phase 4 live validation
-requires observed containers, target health, Grafana queries, Alertmanager
-delivery/grouping, GlitchTip events, accepted Portainer endpoint, and backup/
-restore evidence; do not conflate the two.
-
-## Module Repository Model (4-Tier)
-
-| Tier | Source | Versioning | Per-instance? |
-|---|---|---|---|
-| Client | Direct workspace `kimkom-modules/<client-slug>/` | Selected module names, each locked to a 40-character source commit | Only that client |
-| Shared KimKom | Direct workspace `kimkom-modules/shared/` | Selected module names, each locked to a 40-character source commit | Selected per client |
-| Enterprise | Odoo's private source | Selected module names, each locked to a 40-character source commit | Licensed clients only |
-| OCA | OCA source repositories | Selected module names, each locked to a 40-character source commit | Selected per client |
-| External | Explicit third-party source repositories | Selected module names, each locked to a 40-character source commit | Selected per client |
-
-The schema-v3 client manifest (`clients/<slug>.yml`) specifies the selected
-exact module names and source records for each applicable tier. Every source
-record has a repository/workspace, an exact module-name list, and a
-40-character source commit. It does not use a single mutable repository/ref
-pair or implicitly include an entire repository.
-
-CI builds one immutable Odoo image per customer from that client's matrix entry.
-Client, Shared KimKom, Enterprise, OCA, and External sources are separate
-tiers; only explicitly selected modules are installed.
+Modules are developed directly in the workspace. Dev containers mount these
+paths read-only. For production, modules are copied into the Docker build
+context and baked into the image via CI.
 
 ## Key Commands
 
@@ -220,8 +166,8 @@ ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
 
 Legacy dev instances may have `.env` values for `DB_PASSWORD`,
 `ODOO_ADMIN_PASSWORD`, and GlitchTip integration. Clean generated instances use
-their generated DB/admin values; the customer-ops DSN remains a protected
-reference. Without `--env-file`, Odoo cannot connect to PostgreSQL.
+their generated DB/admin values; GlitchTip DSN is passed via `--glitchtip-dsn`
+or left empty. Without `--env-file`, Odoo cannot connect to PostgreSQL.
 
 ```bash
 # WRONG
@@ -253,8 +199,7 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 ### GlitchTip
 
 - Internal only: `http://100.67.52.95:8001` (Tailscale, no external domain)
-- Clean Phase 3 project/DSN reservation and managed-target onboarding belong to
-  `customer-ops`; the inventory stores only a protected DSN reference.
+- Projects created manually per customer; DSN stored in instance `.env`
 - Legacy instance-specific sentry integration, where present, is not a clean
   generator guarantee and must not be copied from SuperTCG into a new client.
 
@@ -297,16 +242,7 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 
 ## Provisioning (init-client.sh)
 
-11-phase resumable Phase 1/2 provisioning with state tracking via `.provision-state` on the target server. The deployment checkout is pinned and detached; updates do not use `git pull`. Clean Phase 3 target onboarding uses `customer-ops.py` instead of manual target-file appends.
-
-**Bugs fixed (commit 5658967):**
-- Argument parsing double-shift (line 135 `shift || true` removed)
-- `run_phase()` always returned 0 — now returns 1 to trigger `||` phase body
-- State file written before stack dir existed — now `mkdir -p` in `mark_phase`
-- `git clean -fd` deleted `.provision-state` — now uses `-e .provision-state -e .env -e volumes`
-- `env-setup` regenerated passwords on every run — now reuses existing `.env` if present
-- `directories` phase `install -d` failed without sudo — now falls back to `sudo -n`
-- Manifest validation uses strict schema v3 with canonical repositories and exact source pins
+11-phase resumable provisioning with state tracking via `.provision-state` on the target server. The deployment checkout is pinned and detached; updates do not use `git pull`. Monitoring onboarding appends targets directly to `nodes.yml`, `postgres.yml`, and `https.yml`, then restarts Prometheus.
 
 **Phases:**
 1. **server-bootstrap** — Docker, UFW, SSH hardening (via install.sh)
@@ -319,17 +255,9 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 8. **full-stack** — Start all Compose services
 9. **health-check** — Verify HTTPS endpoint with valid TLS (no `-k`)
 10. **backup-setup** — Install backup-v2 credentials, enable timers, first backup + verify
-11. **monitoring-onboard** — Legacy Phase 1/2 onboarding; clean Phase 3 customers use local inventory plus generated managed targets
+11. **monitoring-onboard** — Append Prometheus targets, restart Prometheus, print Portainer instructions
 
-Flags: `--resume`, `--force-phase <name>`, `--reset-state`, `--tailscale-token <key>`, `--commandcenter-ip <ip>`
-
-**Manifest schema v3** (`clients/<slug>.yml`):
-- `schema_version: 3`
-- `modules` contains per-tier source records with selected exact module names
-  and 40-character source commits; there is no repository-wide mutable ref
-- CI expands the client matrix entry, fresh-installs/tests the selected
-  modules, performs a cold start, emits the source-lock BOM, scans it, and
-  publishes the image digest
+Flags: `--resume`, `--force-phase <name>`, `--reset-state`, `--tailscale-token <key>`, `--commandcenter-ip <ip>`, `--glitchtip-dsn <dsn>`
 
 ## Backup System
 
@@ -424,7 +352,6 @@ PROD Server (Hetzner/TEST) ← SSH ← CommandCenter (deploy_key)
 
 | Dashboard | UID | Purpose |
 |---|---|---|
-| KimKom – Customer Overview | kimkom-customer-overview | Uptime, response time, DB connections, alerts, backup, disk, memory, SSL expiry, tool links |
 | Node Exporter – Server Resources | kimkom-node-exporter | CPU, memory, disk, network, load, uptime |
 | PostgreSQL – CommandCenter Shared | kimkom-postgresql | Connections, transactions, tuples, DB size, cache hit ratio |
 | Backup v2 – Status | kimkom-backup-v2 | Backup success/fail, last-backup age, restore verification, duration |
@@ -433,19 +360,14 @@ Grafana datasource UIDs: Prometheus=`PBFA97CFB590B2093`, Alertmanager=`alertmana
 
 ## CI Pipeline (KimKom-stack)
 
-1. CI expands the per-client image matrix from schema-v3 manifests.
-2. It resolves exact selected technical modules at recorded 40-character
-   commits.
-3. It builds each client image once, then tests that same image, including a
-   fresh install and cold start.
-4. It records the source-lock BOM and applies the configured security gate.
-5. Release is permitted only from `refs/heads/main` through the protected
-   `clean-client-release` environment with required approval.
+Simple build-and-push to GHCR:
+1. On push to `main`, build the Odoo image from `odoo/Dockerfile`.
+2. Tag with the Git SHA.
+3. Push to `ghcr.io/alex12358795/kimkom-odoo:<sha>`.
+4. Use the resulting digest with `update.sh --target-image <image@sha256:digest>`.
 
-PR jobs must have no private source or package credentials. Private external
-source onboarding requires an explicitly reviewed environment-secret mapping.
-Private checkout, GHCR publication, Trivy execution, image digests, and
-generated-instance runtime remain unproven until directly evidenced.
+No matrix, no schema-v3 manifests, no protected environments. Module source is
+copied into the Docker build context at build time.
 
 ## Git History Sanitization
 

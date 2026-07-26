@@ -21,7 +21,7 @@ groups:
 
       - alert: ManagedHTTPSUnavailable
         expr: |
-          probe_success{job="blackbox-https",managed_by="kimkom"} == 0
+          probe_success{job="blackbox-https"} == 0
         for: 5m
         labels:
           severity: critical

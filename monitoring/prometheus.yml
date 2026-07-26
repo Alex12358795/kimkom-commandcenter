@@ -26,12 +26,10 @@ scrape_configs:
   - job_name: "client-nodes"
     file_sd_configs:
       - files: ["/etc/prometheus/exporter-targets/nodes.yml"]
-      - files: ["/etc/prometheus/exporter-targets/managed/node.json"]
 
   - job_name: "client-postgres"
     file_sd_configs:
       - files: ["/etc/prometheus/exporter-targets/postgres.yml"]
-      - files: ["/etc/prometheus/exporter-targets/managed/postgres.json"]
 
   - job_name: "cadvisor"
     static_configs:
@@ -51,7 +49,6 @@ scrape_configs:
       module: ["http_2xx"]
     file_sd_configs:
       - files: ["/etc/prometheus/targets/http.yml"]
-      - files: ["/etc/prometheus/targets/managed/http.json"]
     relabel_configs:
       - source_labels: ["__address__"]
         target_label: "__param_target"
@@ -66,7 +63,6 @@ scrape_configs:
       module: ["https_2xx"]
     file_sd_configs:
       - files: ["/etc/prometheus/targets/https.yml"]
-      - files: ["/etc/prometheus/targets/managed/https.json"]
     relabel_configs:
       - source_labels: ["__address__"]
         target_label: "__param_target"
