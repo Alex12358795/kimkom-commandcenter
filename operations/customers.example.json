@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "customers": {
+    "acme": {
+      "slug": "acme",
+      "name": "Acme",
+      "status": "active",
+      "domain": "acme.example.com",
+      "glitchtip": {"project_slug": "acme", "dsn_ref": "secrets/customer-ops/acme/glitchtip-dsn"},
+      "portainer": {"status": "pending"},
+      "development": {"active": true},
+      "production": {
+        "active": true,
+        "management_target": "100.64.0.10:9001",
+        "node_target": "100.64.0.10:9100",
+        "postgres_target": "100.64.0.10:9187",
+        "http_target": "http://acme.example.com",
+        "https_target": "https://acme.example.com"
+      }
+    }
+  }
+}

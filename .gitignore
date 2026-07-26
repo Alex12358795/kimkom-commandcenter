@@ -24,6 +24,13 @@ glitchtip/dsns.json
 glitchtip/.env
 monitoring/alertmanager/alertmanager.yml
 
+# Customer operations local state and rendered discovery
+operations/customers.json
+operations/customers.lock
+secrets/customer-ops/
+monitoring/prometheus/targets/managed/
+monitoring/blackbox/targets/managed/
+
 # Embedded git repos
 instances/*/addons/*/.git/
 

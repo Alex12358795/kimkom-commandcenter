@@ -16,7 +16,7 @@ Step-by-step instructions for day-to-day operations: adding clients, developing 
 8. [Rolling Back a Production Deployment](#8-rolling-back-a-production-deployment)
 9. [Running Backups](#9-running-backups)
 10. [Restoring from Backup](#10-restoring-from-backup)
-11. [Connecting GlitchTip to an Instance](#11-connecting-glitchtip-to-an-instance)
+11. [GlitchTip Ownership](#11-glitchtip-ownership)
 12. [Monitoring and Alerting](#12-monitoring-and-alerting)
 13. [Troubleshooting](#13-troubleshooting)
 14. [Credentials and Secrets Reference](#14-credentials-and-secrets-reference)
@@ -41,7 +41,7 @@ CommandCenter (192.168.178.19 / 100.67.52.95)
     ↓ git push (from modules/) → GitHub
     ↓ CI → builds image → GHCR
     ↓
-    ↓ SSH (deploy_key) → update.sh → pulls new image
+    ↓ SSH (deploy_key) → update.sh → exact detached SHA/image update
     ↓
 PROD VM (Hetzner, one per customer)
     ├── Tailscale (100.x.x.x, RouteAll=false, CorpDNS=false)
@@ -62,33 +62,112 @@ PROD VM (Hetzner, one per customer)
 ## 2. Adding a New Development Client
 
 A dev client is a new Odoo instance on CommandCenter for development and testing.
+This Phase 1 flow applies **only to new clients and new modules**. Existing
+SuperTCG, Vranckeneers, and kimkom-dev instances retain their instance-local
+mounts and are not migrated by this procedure.
+
+The generator creates and configures a new development runtime only. Before
+running it, maintainers must initialize or update the reviewed Git workspace
+separately through the module workflow under
+`/opt/kimkom-modules/<client-slug>/` and `/opt/kimkom-modules/shared/` (or the
+configured `KIMKOM_MODULES_ROOT`). It never clones source. The generated Odoo
+containers mount these client and shared paths read-only.
+
+### Phase 3 Lane E contract (clean customers)
+
+The clean-customer path is separate from the legacy SuperTCG, Vranckeneers, and
+kimkom-dev instances and from the Phase 1/2 production notes below:
+
+- `operations/customers.json` is the local, secret-free inventory. It contains
+  references such as `secrets/customer-ops/<slug>/glitchtip-dsn`; the private
+  DSN value is stored in that file with restrictive permissions, never in the
+  JSON inventory or generated target files.
+- `scripts/customer-ops.py` is the idempotent lifecycle entry point. It
+  reserves customers, activates development or production records, accepts an
+  observed Portainer endpoint, and reconciles managed file-SD targets.
+  Generated targets live under `monitoring/prometheus/targets/managed/` and
+  `monitoring/blackbox/targets/managed/`; never append targets manually to
+  hand-managed YAML files.
+- Portainer remains `pending` until an operator observes the endpoint in
+  Portainer and records its accepted endpoint ID/reference. Enrollment is
+  manual; do not claim an endpoint is enrolled merely because a server exists.
+- Grafana's generic **KimKom – Customer Overview** selects by `client` labels.
+  Its backup panels use `kimkom_backup_v2_backup_last_run_success`,
+  `kimkom_backup_v2_verify_last_run_success`, and the corresponding
+  `*_last_success_timestamp_seconds` age metrics. Alertmanager groups customer
+  context centrally; it does not create a separate per-customer route.
+- The clean new-dev generator applies these admission defaults: at least 3 GiB
+  available memory, no more than 25% swap used when swap exists, at least 30
+  GiB root free space, and one-minute load below 70% of logical CPU capacity.
+  The current host is denied by these measured thresholds. An operator may
+  proceed only with the explicit `--override-capacity --override-reason "..."`
+  option; the nonempty reason is recorded in instance metadata. Generated Odoo is low-concurrency and
+  resource-limited (`workers=0`, one cron thread, 0.75 CPU, 768 MiB reserved,
+  1280 MiB limit) and its dedicated PostgreSQL role has `CONNECTION LIMIT 10`.
+- This lane has no Kubernetes or PITR scope. Existing legacy instances are not
+  modified.
+
+#### Phase 3 operator commands
+
+Run from `/opt/kimkom-commandcenter`:
+
+```bash
+# Validate/reconcile the local inventory and managed files
+python3 scripts/customer-ops.py reconcile
+
+# Reserve a customer (add --dry-run when GlitchTip is unavailable)
+python3 scripts/customer-ops.py reserve <slug> --name "Customer Name"
+
+# Generate a clean development instance; this host currently fails admission
+./scripts/create-odoo-instance.sh --client <slug>
+
+# Explicit, reviewed exception to admission (record a real reason)
+./scripts/create-odoo-instance.sh --client <slug> \
+  --override-capacity --override-reason "ticket/approval and rationale"
+
+# Accept only an endpoint ID/reference observed in Portainer
+python3 scripts/customer-ops.py accept-portainer <slug> --endpoint-ref <observed-id>
+```
+
+Deterministic Phase 3 validation covers schema/secret-free inventory checks,
+idempotent lifecycle behavior, generated target shape and labels, admission
+threshold decisions, resource limits, DB connection limit, and the absence of
+legacy/Kubernetes/PITR changes. Phase 4 live validation is separate: observe
+running containers, actual Prometheus target health, Grafana queries,
+Alertmanager grouping/delivery, GlitchTip events, Portainer's accepted endpoint,
+and backup/restore evidence. Do not describe deterministic checks as live
+production validation.
 
 ### 2.1 Create the instance
 
 ```bash
 cd /opt/kimkom-commandcenter
 ./scripts/create-odoo-instance.sh --client Acme
+# Optional alternate workspace root (the default is /opt/kimkom-modules):
+KIMKOM_MODULES_ROOT=/opt/kimkom-modules ./scripts/create-odoo-instance.sh --client Acme
 ```
 
 This creates:
 - `instances/acme/` directory
 - `instances/acme/docker-compose.yml` (Traefik labels, rate limiting, WebSocket)
-- `instances/acme/config/odoo.conf` (dedicated DB role, sentry_dsn)
-- `instances/acme/.env` (DB_PASSWORD, ODOO_ADMIN_PASSWORD, GLITCHTIP_DSN)
-- `instances/acme/Dockerfile` (with sentry-sdk>=2.0.0)
-- `instances/acme/addons/` — empty, add your modules here
-- `instances/acme/addons-oca/` — empty, copy OCA modules here
+- `instances/acme/config/odoo.conf` (dedicated DB role; optional legacy GlitchTip integration is separate)
+- `instances/acme/.env` (DB_PASSWORD, ODOO_ADMIN_PASSWORD)
+- `instances/acme/Dockerfile` (generator-defined dependencies; no sentry-sdk claim)
+- `/opt/kimkom-modules/acme/` and `/opt/kimkom-modules/shared/` — direct host-editable module workspaces
+- `instances/acme/addons-enterprise/`, `addons-oca/`, and `addons-external/` — per-instance dependency directories
 - `instances/acme/data/` — filestore, chown 100:101
 - Dedicated PostgreSQL role `odoo_acme` and database `odoo_acme`
 - Odoo MCP config entry
 
-### 2.2 Start the instance
+The non-dry-run generator builds, initializes, and starts the Odoo container.
+Do not run a second startup command as part of generation; proceed to
+verification.
 
-```bash
-docker compose -f instances/acme/docker-compose.yml --env-file instances/acme/.env up -d --build --wait --wait-timeout 300
-```
+Prepare and review the two module workspaces separately before starting the
+runtime. Existing legacy instance-local trees remain out of scope and
+untouched.
 
-### 2.3 Verify
+### 2.2 Verify
 
 ```bash
 # Check container health
@@ -105,16 +184,21 @@ In your Proxmox Cloudflare Tunnel config, add:
 public_hostname: acme.kimkom.net → http://192.168.178.19:80
 ```
 
-### 2.5 Connect GlitchTip
+### 2.5 Reserve GlitchTip project
 
-See [Section 11](#11-connecting-glitchtip-to-an-instance).
+For a clean customer, run `customer-ops reserve` as described in Section 6.5.
+It owns project creation and the protected DSN reference; there is no separate
+manual GlitchTip connection or DSN-copy procedure.
 
-### 2.6 Copy OCA modules (if needed)
+### 2.6 Dependency modules (if needed)
 
-```bash
-# From existing instance (e.g., sentry module)
-cp -r instances/SuperTCG/addons-oca/sentry instances/acme/addons-oca/
-```
+For the clean new-customer path, record each dependency as an explicit selected
+module name, source, and 40-character source commit in the schema-v3 manifest.
+The client/shared workspace model is direct source under
+`/opt/kimkom-modules/<client-slug>/` and `/opt/kimkom-modules/shared/`; do not
+copy custom modules into an instance-local `addons/` tree. The existing
+SuperTCG, Vranckeneers, and kimkom-dev instance-local legacy trees are out of
+scope and remain untouched.
 
 ---
 
@@ -122,18 +206,22 @@ cp -r instances/SuperTCG/addons-oca/sentry instances/acme/addons-oca/
 
 ### 3.1 Find where the modules live
 
-Dev instances mount their addons directories as writable bind mounts:
+New dev instances mount source workspaces as read-only bind mounts:
 
 | Mount | Path on host | Contents |
 |---|---|---|
-| `/mnt/extra-addons` | `instances/<client>/addons/` | Custom modules you develop |
-| `/mnt/extra-enterprise` | `instances/<client>/addons-enterprise/` | Odoo Enterprise (not committed) |
-| `/mnt/extra-oca` | `instances/<client>/addons-oca/` | OCA community modules (not committed) |
+| `/mnt/kimkom-client` | `/opt/kimkom-modules/<client>/` | Client-specific modules |
+| `/mnt/kimkom-shared` | `/opt/kimkom-modules/shared/` | Shared modules |
+| `/mnt/extra-enterprise` | `instances/<client>/addons-enterprise/` | Odoo Enterprise |
+| `/mnt/extra-oca` | `instances/<client>/addons-oca/` | OCA community modules |
+| `/mnt/extra-external` | `instances/<client>/addons-external/` | External dependencies |
+
+All source mounts are read-only; containers must not write to module workspaces.
 
 ### 3.2 Create a new module
 
 ```bash
-cd /opt/kimkom-commandcenter/instances/<client>/addons/
+cd /opt/kimkom-modules/<client>/
 mkdir my_module
 cd my_module
 ```
@@ -202,14 +290,13 @@ cd /opt/kimkom-modules
 git pull origin main   # Get latest
 ```
 
-### 4.3 Copy your modules from the dev instance
+### 4.3 Edit the modules workspace directly
 
 ```bash
-# For client-specific modules:
-cp -r /opt/kimkom-commandcenter/instances/<client>/addons/my_module /opt/kimkom-modules/<client-slug>/
-
-# For shared modules:
-cp -r /opt/kimkom-commandcenter/instances/<client>/addons/kimkom_shared_module /opt/kimkom-modules/shared/
+# Client-specific modules are edited directly in:
+cd /opt/kimkom-modules/<client-slug>
+# Shared modules are edited directly in:
+cd /opt/kimkom-modules/shared
 ```
 
 ### 4.4 Clean up before committing
@@ -231,18 +318,47 @@ git push origin main
 
 ### 4.6 Update the client manifest (if new OCA/Enterprise deps)
 
-Edit `/opt/KimKom-stack/clients/<client-slug>.yml`:
+Use this schema-v3 shape in `/opt/KimKom-stack/clients/<client-slug>.yml`:
 
-```yaml
-modules:
-  shared:
-    - kimkom_shared_module
-  client_dir: "<client-slug>"
-  oca:
-    - repo: "https://github.com/OCA/server-tools.git"
-      ref: "18.0"
-      modules: ["sentry", "auditlog"]
+```json
+{
+  "schema_version": 3,
+  "display_name": "Acme Corp",
+  "slug": "acme",
+  "profiles": ["core"],
+  "target_rpo": "1h",
+  "target_rto": "4h",
+  "image": {"repository": "ghcr.io/alex12358795/acme-odoo", "tag": "<git-sha>"},
+  "management": {"provider": "tailscale", "resource_id": "acme"},
+  "network": {"provider": "tailscale", "public_address": null, "private_address": null},
+  "modules": {
+    "internal": {
+      "repository": "alex12358795/kimkom-modules",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "client": "acme",
+      "client_modules": ["acme_module"],
+      "shared_modules": ["kimkom_shared_module"]
+    },
+    "enterprise": null,
+    "sources": [{
+      "name": "server-tools",
+      "kind": "oca",
+      "repository": "OCA/server-tools",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "modules": ["sentry"],
+      "auth": "public"
+    }]
+  }
+}
 ```
+
+Every selected module list contains technical names and every source uses an
+exact lowercase 40-character commit. Repositories are canonical
+`owner/repository` IDs; do not use URLs, old `shared`/`client`/`oca`/`external`
+keys, mutable refs, or repository-wide inclusion. `enterprise` is `null` or
+an object with `repository`, `commit`, and a non-empty `modules` list. The
+`<git-sha>` image tag is replaced by CI with the commit SHA; it is not a
+mutable branch or release tag.
 
 Commit and push KimKom-stack:
 
@@ -254,41 +370,56 @@ git push origin main
 
 ### 4.7 Verify CI
 
-CI will automatically:
-1. Validate manifests
-2. Checkout modules at the pinned commit
-3. Run Odoo lint + tests
-4. Build the image
-5. Scan with Trivy
-6. Push to GHCR
+CI is required to:
+1. Validate schema-v3 manifests and the per-client image matrix
+2. Fetch direct workspace/dependency sources at their 40-character commits
+3. Build the client image once, then fresh-install/test the selected modules
+   on that same image and cold-start it
+4. Emit the source-lock BOM and run the configured vulnerability gate
+5. Release only from `refs/heads/main` through the protected
+   `clean-client-release` environment and its required approval
 
-Check at: `https://github.com/Alex12358795/KimKom-stack/actions`
+Check at: `https://github.com/Alex12358795/KimKom-stack/actions`. PR jobs have no
+private source or package credentials. Private external source onboarding
+requires an explicitly reviewed environment-secret mapping. These are release
+requirements, not evidence that private checkout, GHCR publication, Trivy,
+or generated-instance runtime has been completed here.
+
+There is no direct rsync-to-production path. Commit and push the modules repo;
+release only through CI-built immutable images and the normal production
+deployment process. `scripts/deploy-module.sh` is unsupported for this new
+flow, as are current instance-local legacy trees.
 
 ---
 
 ## 5. Building a Production Image (CI)
 
-The CI pipeline (`immutable-image.yml`) builds automatically on push to `main` or when manually triggered.
+The intended CI pipeline (`immutable-image.yml`) builds one image per client
+in the manifest matrix. PR jobs must have no private source or package
+credentials. Private external source onboarding requires an explicitly
+reviewed mapping from that source to a protected environment secret.
 
 ### 5.1 How it works
 
-1. Validate client manifests + shell syntax + Compose configs
-2. For each client in the manifest matrix:
-   - Checkout `kimkom-modules` at pinned commit
-   - Checkout OCA repos at pinned refs
-   - Copy modules into `odoo/modules/<client-slug>/`
-   - Run `odoo -i base --stop-after-init` (lint)
-   - Run `odoo --test-enable --log-level=test` (tests)
-3. Build Docker image with `CLIENT_SLUG` build arg
-4. Scan with Trivy (CRITICAL, HIGH)
-5. Push to GHCR as `ghcr.io/alex12358795/<slug>-odoo:<git-sha>`
+1. Validate schema-v3 manifests and the client image matrix.
+2. For each client, fetch sources at recorded 40-character commits, selecting
+   exact module names only.
+3. Build the client image once, then fresh-install/test modules on that same
+   image and cold-start it.
+4. Record the source-lock BOM and apply the configured vulnerability gate.
+5. Permit release only from `refs/heads/main` via protected
+   `clean-client-release` with required approval.
+
+The source-lock BOM is intended to record the source commit for every selected
+module. Private checkout, Trivy execution, GHCR publication, image digest, and
+generated-instance runtime remain unverified until evidence is captured.
 
 ### 5.2 Manually trigger CI
 
 1. Go to `https://github.com/Alex12358795/KimKom-stack/actions`
 2. Click "Immutable image CI"
 3. Click "Run workflow"
-4. Select branch: `main`
+4. Select the protected release branch configured by the workflow
 5. Click "Run workflow"
 
 ### 5.3 Get the image digest
@@ -304,11 +435,14 @@ Use the `@sha256:...` value as `--odoo-image` in `init-client.sh` or in the `.en
 
 ---
 
-## 6. Provisioning a New Production Customer
+## 6. Clean-customer manual test runbook (Phase 3 deterministic/mock; Phase 4 TEST-VM live)
 
-This is the complete zero-to-live workflow. Follow every step in order.
+This is the executable clean-customer acceptance runbook. Phase 3 is static or
+mocked and must be non-mutating. Phase 4 is the only lane allowed to touch the
+TEST VM or perform live backup, monitoring, Portainer, GlitchTip, or HTTPS
+validation. Legacy production notes are not a dependency of this flow.
 
-### 6.0 Before You Start — Complete Checklist
+### 6.0 Required inputs and prerequisites
 
 Before running any commands, collect these:
 
@@ -319,17 +453,19 @@ Before running any commands, collect these:
 | Production domain | Yes | Client provides (e.g., `acme.com`) |
 | Hetzner VPS (or similar) | Yes | Fresh Ubuntu 24.04, at least 2 vCPU, 4 GB RAM, 40 GB disk |
 | VPS public IP | Yes | From VPS provider console |
-| VPS root password or user | Yes | From VPS provider |
+| VPS root password or user | Yes | From VPS provider, supplied interactively or via approved secret handling; never put it in this document |
 | SSH key for VPS | Yes | Usually VPS provider adds one; we add our deploy key too |
 | DNS A record | Yes | `<domain>` → VPS public IP (create before TLS phase) |
 | Hetzner Object Storage bucket | Yes | Create via Hetzner Cloud Console |
 | S3 access key + secret (for backups) | Yes | Create via Hetzner Cloud Console → Object Storage → Credentials |
 | Tailscale auth key | **Recommended** | https://login.tailscale.com/admin/settings/keys (one-time key) |
 | Odoo image digest | Yes | From CI pipeline (see Section 5.3) — `ghcr.io/alex12358795/<slug>-odoo@sha256:...` |
-| GlitchTip DSN | **Recommended** | Create project first (see Section 11.1) — store the DSN |
+| GlitchTip reservation | Yes for clean customers | `customer-ops reserve` owns project creation and the private DSN reference/file |
 | Module manifest | Yes | `clients/<slug>.yml` in KimKom-stack (see Section 6.1 below) |
 | Modules ready in kimkom-modules repo | Yes | All customer + shared modules pushed to GitHub |
-| Backup Restic password | Yes | Generate and escrow: `openssl rand -base64 32` |
+| Backup credentials | Yes | Dedicated S3 key/secret and Restic password through the approved secret input path |
+| Backup escrow reference | Yes | Non-secret off-host recovery/config reference passed as `--backup-escrow-reference` |
+| Private-clone deploy key | If the KimKom-stack clone is private | Distinct GitHub deploy key file passed as `--github-deploy-key-file`; do not reuse the production SSH key |
 | Enterprise modules (optional) | If licensed | Exact commit SHA from Odoo's private repo |
 | OCA modules (optional) | If needed | Exact commit SHAs per repo |
 
@@ -341,8 +477,8 @@ mkdir -p /opt/kimkom-modules/<client-slug>
 
 # If they use shared KimKom modules, ensure they're in /opt/kimkom-modules/shared/
 
-# Copy your dev modules in (if already developed)
-cp -r /opt/kimkom-commandcenter/instances/<client>/addons/* /opt/kimkom-modules/<client-slug>/
+# New modules are developed directly in /opt/kimkom-modules/<client-slug>/.
+# Existing instance-local trees are legacy and are not migrated by Phase 1.
 
 # Clean up
 find /opt/kimkom-modules/<client-slug> -name '__pycache__' -exec rm -rf {} + 2>/dev/null
@@ -368,7 +504,7 @@ Create `/opt/KimKom-stack/clients/<client-slug>.yml`:
 
 ```yaml
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "display_name": "Acme Corp",
   "slug": "acme",
   "profiles": ["core"],
@@ -388,24 +524,31 @@ Create `/opt/KimKom-stack/clients/<client-slug>.yml`:
     "private_address": null
   },
   "modules": {
-    "kimkom_modules_repo": "git@github.com:Alex12358795/kimkom-modules.git",
-    "kimkom_modules_ref": "a3c50167b58ced55cf1502c4f7efbdf25845bf3c",
-    "shared": [],
-    "client_dir": "acme",
+    "internal": {
+      "repository": "alex12358795/kimkom-modules",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "client": "acme",
+      "client_modules": ["acme_module"],
+      "shared_modules": ["kimkom_shared_module"]
+    },
     "enterprise": null,
-    "oca": [
-      {
-        "repo": "https://github.com/OCA/server-tools.git",
-        "ref": "abc123...",
-        "modules": ["sentry"]
-      }
-    ],
-    "external": []
+    "sources": [{
+      "name": "server-tools",
+      "kind": "oca",
+      "repository": "OCA/server-tools",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "modules": ["sentry"],
+      "auth": "public"
+    }]
   }
 }
 ```
 
-**IMPORTANT:** Use exact commit SHAs for `kimkom_modules_ref` and OCA `ref` values — NOT branch names like `main` or `18.0`. Production images must be reproducible.
+**IMPORTANT:** Every selected module source must use an exact lowercase
+40-character commit SHA and a canonical `owner/repository` ID. Do not use
+URLs, mutable refs, or implicit repository-wide selection. Use only the
+schema-v3 `internal`, `enterprise`, and `sources` keys with technical module
+lists. The `<git-sha>` image tag is replaced by CI with the commit SHA.
 
 Validate the manifest:
 ```bash
@@ -457,29 +600,149 @@ ssh -i /opt/kimkom-commandcenter/ssh/deploy_key root@<VPS_IP> 'echo OK'
 
 3. **Create DNS A record**: Point `<domain>` to the VPS public IP (do this before the TLS phase or Let's Encrypt will fail)
 
-### 6.5 Create GlitchTip Project
+### 6.5 Reserve the customer (Phase 3, non-mutating when dry-run)
+
+`customer-ops reserve` owns GlitchTip project creation and stores only a private
+DSN reference in `operations/customers.json`. Do not create a project, retrieve
+a DSN, or copy a DSN manually. For a static check, use a temporary inventory
+checkout and `--dry-run`; do not point the command at the live inventory.
 
 ```bash
-TOKEN=$(cat /opt/kimkom-commandcenter/secrets/commandcenter/glitchtip-api-token)
-
-# Create project
-curl -sS -X POST http://100.67.52.95:8001/api/0/teams/kimkom/kimkom/projects/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"<client-slug>","slug":"<client-slug>"}'
-
-# Get DSN
-curl -sS http://100.67.52.95:8001/api/0/projects/kimkom/<client-slug>/keys/ \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys,json
-keys=json.load(sys.stdin)
-print(keys[0]['dsn']['public'])
-"
+tmp=$(mktemp -d)
+mkdir -p "$tmp/operations" "$tmp/scripts"
+cp operations/customers.example.json "$tmp/operations/customers.json"
+cp scripts/customer-ops.py "$tmp/scripts/customer-ops.py"
+(cd "$tmp" && python3 scripts/customer-ops.py reserve newco --name "Newco Test" --dry-run)
+rm -rf "$tmp"
 ```
 
-Copy the DSN — you'll use it as `--glitchtip-dsn`.
+Expected: `ok: reserve`; no production instance, database, or live GlitchTip
+project is created. The bounded fixture at
+`/opt/KimKom-stack/tests/test-init-client-documentation.sh` covers the remote
+state cases below without SSH or live-state writes.
 
-### 6.6 Provision the Server
+### 6.6 Phase 3 static/mock checklist (non-mutating)
+
+Use only the fixed example inventory
+`/opt/kimkom-commandcenter/operations/customers.example.json` or a temporary
+copy of an empty `{"schema_version":1,"customers":{}}` file. Never use the
+live untracked `operations/customers.json` for a temporary example. The ten
+inventory contract checks are isolated by `tests/test_customer_ops.py` (currently
+14 unittest cases) and must pass without changing inventory, secrets, or managed
+targets:
+
+```bash
+python3 -m unittest -v tests/test_customer_ops.py
+```
+
+The ten expected contract outcomes are: simultaneous development/production records;
+reconcile shape/idempotence; unsafe slug rejection; existing-slug name
+mismatch rejection; target identity rules; missing-input rejection; Portainer
+non-secret reference enforcement; rejected-input immutability; JSON-schema
+invalid-record rejection; and reconcile dry-run immutability. Expected: all ten
+contract outcomes pass (14 cases currently) and all writes remain in test
+temporary directories.
+
+Run the remaining deterministic checks:
+
+```bash
+python3 -c 'from pathlib import Path; compile(Path("scripts/customer-ops.py").read_text(), "scripts/customer-ops.py", "exec")'
+python3 -m json.tool operations/customers.example.json >/dev/null
+./scripts/test-generate-alertmanager-config.sh
+if command -v promtool >/dev/null 2>&1; then
+  promtool check config monitoring/prometheus.yml
+  promtool check rules monitoring/prometheus/rules/baseline.yml
+else
+  docker run --rm --entrypoint promtool \
+    -v "/opt/kimkom-commandcenter:/work:ro" prom/prometheus:v2.53.0 \
+    check config /work/monitoring/prometheus.yml
+  docker run --rm --entrypoint promtool \
+    -v "/opt/kimkom-commandcenter:/work:ro" prom/prometheus:v2.53.0 \
+    check rules /work/monitoring/prometheus/rules/baseline.yml
+fi
+tmp=$(mktemp)
+docker compose -f monitoring/docker-compose.yml --env-file .env config >"$tmp"
+rm -f "$tmp"
+python3 - <<'PY'
+import json
+from pathlib import Path
+for path in Path("monitoring/grafana/provisioning/dashboards").glob("*.json"):
+    json.loads(path.read_text())
+print("dashboard JSON parse: PASS")
+PY
+./scripts/create-odoo-instance.sh --client acme --dry-run
+./scripts/create-odoo-instance.sh --client acme --dry-run \
+  --override-capacity --override-reason "documentation fixture only"
+/opt/KimKom-stack/tests/test-init-client-documentation.sh
+git diff --check -- SOP.md AGENTS.md README.md
+git diff --name-only -- AGENTS.md SOP.md README.md
+```
+
+Expected: the Alertmanager fixture creates and removes temporary output with
+mode `0644`; promtool accepts the Prometheus config and rules; Compose renders
+without starting services; dashboard JSON parses; the ordinary generator
+denies this host on measured thresholds; the override dry-run renders only
+temporary files; the documentation harness passes; and diff checks report no
+whitespace errors; the scope listing contains only allowed documentation files.
+No command starts Odoo, rewrites the live inventory, writes
+secrets, or changes monitoring/runtime state.
+
+The non-dry-run generator itself builds, initializes, and starts Odoo, so no
+follow-up startup command belongs in this runbook. No clean-flow `sentry-sdk`
+installation or legacy-source copy is assumed.
+
+For the reservation-specific dry-run, copy the fixed example inventory and the
+customer-ops script into a temporary checkout, then reserve a new example slug:
+
+```bash
+tmp=$(mktemp -d)
+mkdir -p "$tmp/operations" "$tmp/scripts"
+cp operations/customers.example.json "$tmp/operations/customers.json"
+cp scripts/customer-ops.py "$tmp/scripts/customer-ops.py"
+(cd "$tmp" && python3 scripts/customer-ops.py reserve newco --name "Newco Test" --dry-run)
+rm -rf "$tmp"
+```
+
+Expected: `ok: reserve`; no live GlitchTip project, database, inventory, or
+managed-target file is created. `customer-ops reconcile` is reserved for live
+onboarding or a disposable copied checkout because it regenerates managed
+target files.
+
+Run the state fixture:
+
+```bash
+/opt/KimKom-stack/tests/test-init-client-documentation.sh
+```
+
+Expected: `init-client documentation state fixture: PASS`. It proves three
+bounded documentation cases: fresh provisioning fails when a remote state file
+already exists without `--resume`; `--resume` succeeds when
+`EXPECTED_STACK_SHA=<same-controller-SHA>` matches; and resume fails closed for
+`<different-controller-SHA>`. It does not claim that a TEST VM was provisioned.
+
+Validate the fresh production argument contract without SSH or remote writes:
+
+```bash
+cd /opt/KimKom-stack
+./init-client.sh --dry-run --server 8.8.8.8 --client "Acme Test" \
+  --client-slug acme-test --domain acme.example.test \
+  --odoo-image ghcr.io/example/acme-odoo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --backup-s3-key key-placeholder --backup-s3-secret secret-placeholder \
+  --backup-escrow-reference vault-ref-acme-001 \
+  --ssh-key /tmp/nonexistent-production-key
+```
+
+Expected: a non-secret plan is printed and no SSH, checkout, database, or live
+state is touched. A private clone additionally requires
+`--github-deploy-key-file /tmp/nonexistent-private-clone-key`; use that option
+in this dry-run when the repository is private. The example uses a globally
+routable synthetic address because the validator rejects documentation-only
+RFC1918/test addresses; dry-run never connects to it.
+
+### 6.7 Fresh provisioning command (Phase 4 TEST VM only)
+
+Fresh means the target has no existing `.provision-state`. Do **not** include
+`--resume` in this command:
 
 ```bash
 cd /opt/KimKom-stack
@@ -490,209 +753,139 @@ cd /opt/KimKom-stack
   --client-slug acme \
   --domain acme.com \
   --odoo-image "ghcr.io/alex12358795/acme-odoo@sha256:abc123..." \
-  --backup-s3-key "ACME_BACKUP_KEY" \
-  --backup-s3-secret "ACME_BACKUP_SECRET" \
-  --tailscale-token "tskey-auth-xxx" \
-  --glitchtip-dsn "http://xxx@100.67.52.95:8001/6" \
+  --backup-s3-key "<provided-key>" \
+  --backup-s3-secret "<provided-secret>" \
+  --backup-escrow-reference "<off-host-reference>" \
+  --github-deploy-key-file "<private-clone-key-file>" \
+  --tailscale-token "<provided-token>" \
   --commandcenter-ip "100.67.52.95" \
   --ssh-user root \
-  --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key \
-  --resume
+  --ssh-key "<production-access-key>"
 ```
 
-This will run all 11 phases. The script is resumable — if anything fails, just re-run with `--resume`.
+Use `--github-deploy-key-file` only when the private clone requires it. Do not
+place any secret value in this runbook or shell history. This fresh command
+requires all of: server/IP, client name and slug, domain, immutable Odoo image,
+dedicated backup S3 key/secret, non-secret backup escrow reference, production
+SSH access key, and—when applicable—the distinct private-clone deploy key.
+Tailscale and optional profile credentials are also required when those options
+are selected. Clean production onboarding runs `customer-ops reserve` and the
+managed-target reconciliation as part of the onboarding contract; Portainer
+remains manual until its observed endpoint reference is accepted.
 
-### 6.7 Post-Provisioning Manual Steps
+If fresh provisioning fails after writing state, rerun the exact command with
+`--resume` only after confirming the controller SHA matches the state file.
+The fresh `--resume` failure is intentional: a state file without explicit
+resume is rejected, and a resume with a mismatched SHA is rejected.
 
-1. **Portainer enrollment**: `http://100.67.52.95:9000` → Environments → Add → Docker Agent → `<tailscale-ip>:9001`
-2. **Verify HTTPS**: `curl -I https://<domain>` (should show valid Let's Encrypt cert)
-3. **Verify WebSocket**: `curl -sS -o /dev/null -w "%{http_code}" https://<domain>/websocket -H "Upgrade: websocket" -H "Connection: Upgrade" -H "Sec-WebSocket-Key: test==" -H "Sec-WebSocket-Version: 13"` (expect 101)
-4. **Verify login disabled**: `curl -sS https://<domain>/web/database/manager` (should show "disabled")
+### 6.8 Portainer acceptance (Phase 4 TEST VM only)
+
+1. Open Portainer CE at `http://100.67.52.95:9000` and add the TEST VM Docker
+   Agent using its approved Tailscale endpoint. Record the endpoint ID shown by
+   the UI/API; an address alone is not acceptance evidence.
+2. Record the observed ID in the local inventory:
+```bash
+python3 scripts/customer-ops.py accept-portainer <slug> --endpoint-ref <observed-id>
+```
+3. Query and verify status:
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+c = json.loads(Path('operations/customers.json').read_text())['customers']['<slug>']
+assert c['portainer']['status'] == 'accepted'
+assert c['portainer']['endpoint_ref'] == '<observed-id>'
+print('Portainer inventory status: accepted')
+PY
+```
+Expected: accepted status matches the observed endpoint ID. A pending record is
+the correct result until this manual observation occurs.
+
+### 6.9 TEST-VM live checks and cleanup evidence
+
+The Oracle-listed Phase 4 prerequisites are: a real encrypted Restic
+repository; real Odoo/PostgreSQL dump and filestore; real pinned image; real
+Docker Compose runtime; TEST VM access; and approved operator recovery access.
+Run the following only on TEST:
+
+```bash
+curl -fsSIL "https://<domain>/web/login"
+ssh -i "<production-access-key>" <user>@<tailscale-ip> \
+  'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
+ssh -i "<production-access-key>" <user>@<tailscale-ip> \
+  'sudo /usr/local/libexec/kimkom-backup-v2/verify-restore.sh'
+```
+
+Also observe Prometheus target health, generic Grafana Customer Overview
+labels/backup panels, central Alertmanager grouping, GlitchTip delivery,
+Portainer status, HTTPS/WebSocket/login behavior, and exact image/SHA records.
+Do not claim these results from static or mock checks. There is no unsupported
+manual test-alert claim; alert delivery is a live Phase 4 observation.
+
+Cleanup evidence must include the TEST VM stack directory/state disposition,
+removed temporary credentials or fixtures, disabled test timers/resources,
+deleted temporary databases/filestores, and screenshots or command output
+showing the final Portainer/inventory status. Preserve backup/recovery evidence
+and the operator decision; do not delete required forensic artifacts.
+
+Remaining live-only commands: all TEST VM SSH backup/restore commands above,
+HTTPS/WebSocket checks, Prometheus/Grafana/Alertmanager/GlitchTip observations,
+and Portainer UI/API observation. Everything in Sections 6.5–6.7 and the state
+fixture is static, dry-run, temporary, or mocked.
+
+### 6.10 Historical Phase 1/2 acceptance reference
+
+The former production checklist is retained only as historical reference. It is
+not evidence for clean Phase 3 and must not be used to create a manual DSN or
+to modify legacy SuperTCG/Vranckeneers/kimkom-dev source.
+
+<!-- historical commands intentionally omitted from the executable clean runbook -->
+
+<!--
 5. **Test backup**: SSH to server and run:
 ```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/backup.sh'
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key <user>@<tailscale-ip> \
+  'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
 ```
-6. **Verify restore**: 
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/verify-restore.sh'
-```
-7. **Test Telegram alert**: The Alertmanager test message was sent earlier; verify you received it
-8. **Verify GlitchTip**: Trigger a test exception in Odoo, check GlitchTip receives it
-
-### 6.8 Acceptance Checklist
-
-Before handing over to the customer:
-
-```text
-[ ] Public HTTPS login returns 200
-[ ] SSL certificate is valid (not self-signed, no -k needed)
-[ ] WebSocket returns 101
-[ ] Database manager is disabled
-[ ] list_db = False
-[ ] dbfilter is set correctly
-[ ] Dedicated PostgreSQL role exists (not shared superuser)
-[ ] Odoo image matches expected digest
-[ ] GlitchTip receives test exceptions
-[ ] Prometheus targets are up and green
-[ ] Telegram alert was received (test message sent during setup)
-[ ] Portainer endpoint is enrolled
-[ ] Online backup completes successfully
-[ ] Isolated restore verification passes
-[ ] Restic password is stored off-host (not only on the server)
-[ ] Deployed Git SHA and image digest are recorded
-[ ] Cloudflare DNS A record is set
-[ ] Customer has admin credentials (from .env on the server)
-```
-
-### 6.9 Record the Deployment
-
-Store this information in a secure location:
-- Server IP + Tailscale IP
-- Domain + DNS provider
-- Image digest deployed
-- Git SHA deployed
-- PostgreSQL role + database name
-- S3 bucket name + backup credentials
-- Restic password
-- GlitchTip DSN
-- Grafana / Portainer / GlitchTip URLs (Tailscale-only)
-
-To start completely over:
-
-```bash
-./init-client.sh ... --reset-state
-```
-
-### 6.4 Post-provisioning manual steps
-
-1. **Portainer**: Go to `http://100.67.52.95:9000` → Environments → Add → Docker Agent → `<tailscale-ip>:9001`
-2. **Cloudflare DNS**: Ensure the domain's A record points to the VPS public IP
-3. **Verify SSL**: `curl -I https://<domain>`
-4. **Test backup**: `ssh ... sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env ... scripts/backup-v2/backup.sh`
+-->
 
 ---
 
 ## 7. Deploying a Production Update
 
-### 7.1 Standard update (pull latest stack, redeploy)
+There is one supported update command. It fetches and verifies exact immutable
+inputs, creates one quiesced recovery point, stops Odoo (and `cron` if present),
+runs the selected module upgrade, then starts and health-checks Odoo. It does
+not run `git pull`, use a mutable ref, or perform a promotion step.
 
 ```bash
 cd /opt/KimKom-stack
-./update.sh \
-  --server <tailscale-ip> \
-  --client-slug <slug> \
-  --ssh-user alex \
+./update.sh --server <tailscale-ip> --client-slug <slug> \
+  --target-sha <40-hex-sha> --target-image <image@sha256:digest> \
+  --upgrade-modules module1,module2 --ssh-user <deployment-user> \
   --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key
 ```
 
-This does:
-1. `git fetch` the latest commit on `main`
-2. Compose diff — shows which services changed
-3. `git pull` to the target ref
-4. `docker compose up -d` on only the changed services
-5. Health check
+The application environment is the deployment user's `$STACK_ROOT/.env`, not
+an external `stack.env`. Restic/S3 credentials, configuration, and installed
+backup tools are root-only. The implemented maintenance boundary is stopped
+Odoo; no actual 503 route exists. There is no automatic rollback, cutover, or
+old-release restart on failure.
 
-### 7.2 Deploy a specific Git commit
+## 8. Recovery after an update
 
-```bash
-./update.sh \
-  --server <tailscale-ip> \
-  --client-slug <slug> \
-  --ref <commit-sha> \
-  --ssh-user alex \
-  --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key
-```
-
-### 7.3 Update only the Odoo image (pin new digest)
-
-1. Update the digest on the production server:
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip>
-cd /opt/kimkom-<slug>
-sed -i 's|ODOO_IMAGE=.*|ODOO_IMAGE=ghcr.io/alex12358795/<slug>-odoo@sha256:...|' .env
-```
-
-2. Run the deployment script:
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'cd /opt/kimkom-<slug> && sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env scripts/backup-v2/backup.sh'
-```
-
-3. Pull and restart:
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'cd /opt/kimkom-<slug> && docker compose pull odoo && docker compose up -d --wait --wait-timeout 180 odoo'
-```
-
-### 7.4 Update Odoo modules (database upgrade)
+After an operator decision, use the installed root-only recovery lane. Prepare
+is isolated and does not change production; apply requires exact confirmation:
 
 ```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip>
-cd /opt/kimkom-<slug>
-
-# Backup first — ALWAYS
-sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env scripts/backup-v2/backup.sh
-
-# Install new modules or upgrade existing ones
-docker compose run --rm odoo -- -u module1,module2 --stop-after-init --no-http
-
-# Or install new modules
-docker compose run --rm odoo -- -i new_module --stop-after-init --no-http
-
-# Restart to pick up registry changes
-docker compose up -d --wait --wait-timeout 180 odoo
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key <user>@<tailscale-ip> \
+  'sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh prepare --id <ID>'
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key <user>@<tailscale-ip> \
+  'sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh apply --id <ID> --confirm-id <ID>'
 ```
 
-### 7.5 Restart a single service
-
-```bash
-./update.sh --server <ip> --client-slug <slug> --restart <service-name>
-```
-
----
-
-## 8. Rolling Back a Production Deployment
-
-### 8.1 Roll back code/image (safe — no database changes)
-
-If you only changed the Odoo image or configuration (no module upgrades):
-
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip>
-cd /opt/kimkom-<slug>
-
-# Revert .env to the previous image digest
-vim .env   # or sed replacement
-
-# Or revert git to the previous commit
-git log --oneline -5
-git reset --hard <previous-commit>
-
-# Rebuild/pull and restart
-docker compose pull odoo        # if using registry image
-docker compose build odoo       # if building locally
-docker compose up -d --wait --wait-timeout 180 odoo
-```
-
-### 8.2 Roll back after module upgrade (DANGER — database already changed)
-
-**Image rollback alone is NOT sufficient.** Module upgrades execute database migrations that are forward-only.
-
-For a full rollback after module upgrade:
-1. Stop Odoo: `docker compose stop odoo`
-2. Restore the pre-upgrade backup:
-```bash
-sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env \
-  restic restore <snapshot-id> --target /var/lib/kimkom-backup-v2/restore
-# Then drop the database, recreate it, and pg_restore from the backup dump
-```
-3. Revert code to pre-upgrade state
-4. Start Odoo
-5. Run `-u` on base modules to rebuild the registry
-
-**Rule:** Always take a backup BEFORE any module upgrade.
+Failures retain maintenance and require manual investigation; there is no
+automatic data restore, image/Git rollback, promotion, or traffic cutover.
 
 ---
 
@@ -733,16 +926,14 @@ Manual run:
 
 ```bash
 ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env \
-  /opt/kimkom-<slug>/scripts/backup-v2/backup.sh'
+  'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
 ```
 
 Manual restore verification (monthly automatic):
 
 ```bash
 ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> \
-  'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env \
-  /opt/kimkom-<slug>/scripts/backup-v2/verify-restore.sh'
+  'sudo /usr/local/libexec/kimkom-backup-v2/verify-restore.sh'
 ```
 
 View snapshots:
@@ -773,91 +964,21 @@ restic restore <snapshot-id> --repo local:backup-repo --password-file secrets/co
 
 ### 10.2 Production restore
 
-```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip>
-
-# List snapshots
-sudo bash -c 'set -a; source /etc/kimkom-backup-v2.env; set +a; restic snapshots'
-
-# Restore a snapshot
-sudo bash -c 'set -a; source /etc/kimkom-backup-v2.env; set +a; restic restore <snapshot-id> --target /tmp/prod-restore'
-
-# The snapshot contains:
-#   - odoo.dump (pg_dump -Fc format)
-#   - release-manifest.tsv
-#   - Odoo filestore
-```
-
-To fully restore a production database:
-1. Stop Odoo: `docker compose stop odoo`
-2. Drop the database: `docker compose exec odoo-db dropdb -U odoo odoo`
-3. Create fresh: `docker compose exec odoo-db createdb -U odoo odoo`
-4. Restore: `docker compose exec -T odoo-db pg_restore -U odoo -d odoo < /tmp/prod-restore/odoo.dump`
-5. Restore filestore: `sudo cp -a /tmp/prod-restore/filestore/. volumes/odoo/filestore/`
-6. Fix permissions: `sudo chown -R 100:101 volumes/odoo/filestore`
-7. Start Odoo: `docker compose up -d odoo`
+Routine snapshot restore is not an automatic production operation. For an
+update recovery point, use the manual `prepare` then exact-confirmed `apply`
+commands in Section 8. For disaster recovery, use an approved outage plan and
+TEST-VM evidence first; mock tests and isolated verification do not prove
+Docker/PostgreSQL/Restic recovery.
 
 ---
 
-## 11. Connecting GlitchTip to an Instance
+## 11. GlitchTip ownership
 
-### 11.1 Create a GlitchTip project
-
-```bash
-TOKEN=$(cat /opt/kimkom-commandcenter/secrets/commandcenter/glitchtip-api-token)
-
-# Create project
-curl -sS -X POST http://100.67.52.95:8001/api/0/teams/kimkom/kimkom/projects/ \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"<client-slug>","slug":"<client-slug>"}'
-
-# Get the DSN
-curl -sS http://100.67.52.95:8001/api/0/projects/kimkom/<client-slug>/keys/ \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys,json
-keys=json.load(sys.stdin)
-print(keys[0]['dsn']['public'])
-"
-```
-
-### 11.2 Configure the dev instance
-
-Edit `instances/<client>/config/odoo.conf` — add at the bottom:
-
-```ini
-sentry_enabled = True
-sentry_dsn = http://<public-key>@100.67.52.95:8001/<project-id>
-sentry_environment = development
-sentry_server_name = <ClientName>
-```
-
-### 11.3 Ensure sentry-sdk is installed
-
-Check `instances/<client>/Dockerfile` has:
-```
-RUN pip3 install ... sentry-sdk>=2.0.0
-```
-
-### 11.4 Copy the sentry OCA module
-
-```bash
-cp -r /opt/kimkom-commandcenter/instances/SuperTCG/addons-oca/sentry \
-  /opt/kimkom-commandcenter/instances/<client>/addons-oca/
-```
-
-### 11.5 Rebuild and install
-
-```bash
-docker compose -f instances/<client>/docker-compose.yml --env-file instances/<client>/.env build --no-cache odoo
-docker compose -f instances/<client>/docker-compose.yml --env-file instances/<client>/.env up -d --force-recreate --wait --wait-timeout 300
-docker compose -f instances/<client>/docker-compose.yml --env-file instances/<client>/.env run --rm odoo -- -i sentry --stop-after-init --no-http
-docker compose -f instances/<client>/docker-compose.yml --env-file instances/<client>/.env up -d --wait --wait-timeout 300
-```
-
-### 11.6 Verify
-
-Check GlitchTip for new events at `http://100.67.52.95:8001`.
+For clean Phase 3 customers, `python3 scripts/customer-ops.py reserve` owns
+project creation and the private DSN reference/file. Do not create projects,
+retrieve DSNs, copy DSNs from legacy instances, or add a manual sentry module
+or startup step to the clean flow. Live GlitchTip delivery is a Phase 4 TEST-VM
+observation only.
 
 ---
 
@@ -905,27 +1026,22 @@ else:
 "
 ```
 
-### 12.5 Add Prometheus targets for a new production server
+### 12.5 Reconcile Prometheus targets for a clean Phase 3 customer
 
-Edit `/opt/kimkom-commandcenter/monitoring/prometheus/targets/nodes.yml`:
-```yaml
-- <tailscale-ip>:9100
-```
+Do not edit `nodes.yml`, `postgres.yml`, `http.yml`, or `https.yml` to append a
+customer. Record the customer and targets in the local inventory, then let the
+idempotent reconciler generate managed file-SD JSON:
 
-Edit `/opt/kimkom-commandcenter/monitoring/prometheus/targets/postgres.yml`:
-```yaml
-- <tailscale-ip>:9187
-```
-
-Edit `/opt/kimkom-commandcenter/monitoring/blackbox/targets/https.yml`:
-```yaml
-- <domain>
-```
-
-Restart Prometheus:
 ```bash
-docker compose -f monitoring/docker-compose.yml --env-file .env restart prometheus
+python3 scripts/customer-ops.py activate-production <slug> --name "Customer Name" \
+  --domain <domain> --management-target <tailscale-ip>:9001 \
+  --node-target <tailscale-ip>:9100 --postgres-target <tailscale-ip>:9187 \
+  --http-target http://<domain> --https-target https://<domain>
+python3 scripts/customer-ops.py reconcile
 ```
+
+Prometheus live health is a Phase 4 validation; the command succeeding only
+proves deterministic inventory and file generation.
 
 ### 12.6 Search logs in Loki
 
@@ -1013,10 +1129,10 @@ chmod 644 /opt/kimkom-commandcenter/monitoring/alertmanager/alertmanager.yml
 docker compose -f monitoring/docker-compose.yml --env-file .env up -d --force-recreate alertmanager
 ```
 
-### 13.7 GlitchTip not receiving events
+### 13.7 Legacy GlitchTip integration not receiving events
 
 ```bash
-# Check sentry module is installed
+# Legacy-instance check only; clean generated clients do not assume sentry-sdk.
 docker exec odoo-<client> python3 -c "import sentry_sdk; print('OK')"
 
 # Check sentry_dsn in odoo.conf
@@ -1062,8 +1178,8 @@ echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuWELPp5kpEHCTjqQhJ9HNXsGjf5QMsm6OnLd
 | What | Where | Format | Mode |
 |---|---|---|---|
 | CommandCenter .env | `/opt/kimkom-commandcenter/.env` | POSTGRES_PASSWORD, GRAFANA_PASSWORD, etc. | 0600 |
-| Instance .env | `instances/<client>/.env` | DB_PASSWORD, ODOO_ADMIN_PASSWORD, GLITCHTIP_DSN | 0600 |
-| Instance odoo.conf | `instances/<client>/config/odoo.conf` | admin_passwd, db_password, sentry_dsn | 0640, group:lxd(101) |
+| Clean generated instance .env | `instances/<client>/.env` | DB_PASSWORD, ODOO_ADMIN_PASSWORD | 0600 |
+| Instance odoo.conf | `instances/<client>/config/odoo.conf` | admin_passwd, db_password; legacy sentry_dsn only where explicitly configured | 0640, group:lxd(101) |
 | Deploy SSH key | `ssh/deploy_key` | ED25519 private key | 0600 |
 | GlitchTip API token | `secrets/commandcenter/glitchtip-api-token` | Bearer token | 0600 |
 | Restic password | `secrets/commandcenter/restic-password` | Encryption password | 0600 |
@@ -1071,12 +1187,12 @@ echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOuWELPp5kpEHCTjqQhJ9HNXsGjf5QMsm6OnLd
 | GlitchTip .env | `glitchtip/.env` | POSTGRES_PASSWORD, SECRET_KEY | 0600 |
 | GlitchTip DSNs | `glitchtip/dsns.json` | Project DSNs | 0600 |
 | Rclone config | `rclone/rclone.conf` | S3 access keys | 0600 |
-| Production .env | `/opt/kimkom-<slug>/.env` on PROD | All service passwords | 0600 |
+| Production .env | `/opt/kimkom-kimkom-prod/.env` on TEST (example) | All service passwords | 0600 |
 | Production backup | `/etc/kimkom-backup-v2/` on PROD | Restic password, AWS credentials | 0600 (root-only) |
 
 **All tracked credentials (in Git history before sanitization) were rotated.** Do NOT re-use old passwords:
 - Old SSH deploy key: revoked
-- Old PostgreSQL passwords: rotated (new: tREgb1nghkl1wphh3BdYXkQN0qFc2BuT)
+- Old PostgreSQL passwords: rotated; retrieve current values only through approved secret storage
 - Old Odoo admin passwords: rotated
 - Old GlitchTip token: replaced with least-privilege read-only token
 
@@ -1095,8 +1211,8 @@ docker compose -f instances/<name>/docker-compose.yml --env-file instances/<name
 # Dev: install/upgrade module
 docker compose -f instances/<name>/docker-compose.yml --env-file instances/<name>/.env run --rm odoo -- -i|u <module> --stop-after-init --no-http
 
-# Dev: copy sentry module
-cp -r instances/SuperTCG/addons-oca/sentry instances/<name>/addons-oca/
+# Dev: edit new client modules directly in /opt/kimkom-modules/<name>/;
+# legacy SuperTCG mounts are excluded from this new-client procedure.
 
 # Modules: push to GitHub
 cd /opt/kimkom-modules && git add -A && git commit -m "..." && git push origin main
@@ -1108,16 +1224,18 @@ cd /opt/KimKom-stack && git add -A && git commit -m "..." && git push origin mai
 cd /opt/kimkom-commandcenter && git add -A && git commit -m "..." && git push origin HEAD:main
 
 # Prod: provision new customer
-cd /opt/KimKom-stack && ./init-client.sh --server <ip> --client <name> --domain <domain> --odoo-image <digest> --backup-s3-key <key> --backup-s3-secret <secret> --tailscale-token <key> --resume
+cd /opt/KimKom-stack && ./init-client.sh --server <ip> --client <name> --domain <domain> --odoo-image <digest> --backup-s3-key <key> --backup-s3-secret <secret> --backup-escrow-reference <reference>
 
 # Prod: deploy update
-cd /opt/KimKom-stack && ./update.sh --server <tailscale-ip> --client-slug <slug> --ssh-user alex --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key
+cd /opt/KimKom-stack && ./update.sh --server <tailscale-ip> --client-slug <slug> \
+  --target-sha <40-hex-sha> --target-image <image@sha256:digest> \
+  --upgrade-modules module1,module2 --ssh-user <user> --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key
 
 # Prod: manual backup
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> 'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/backup.sh'
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key <user>@<tailscale-ip> 'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
 
 # Prod: verify restore
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<tailscale-ip> 'sudo env BACKUP_V2_CONFIG=/etc/kimkom-backup-v2.env /opt/kimkom-<slug>/scripts/backup-v2/verify-restore.sh'
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key <user>@<tailscale-ip> 'sudo /usr/local/libexec/kimkom-backup-v2/verify-restore.sh'
 
 # CC: check all endpoints
 for h in kimkom-dev.kimkom.net supertcg.kimkom.net vranckeneers.kimkom.net kimkom-prod.kimkom.net; do printf '%s: %s\n' "$h" $(curl -sSL -o /dev/null -w '%{http_code}' "https://$h/web/login"); done

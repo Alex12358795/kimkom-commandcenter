@@ -1,52 +1,140 @@
 groups:
   - name: commandcenter-baseline
     rules:
-      - alert: TargetDown
-        expr: (up == 0) and (time() - timestamp(up) < 2 * 60)
+      - alert: ManagedNodeUnavailable
+        expr: up{job="client-nodes"} == 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Prometheus target {{ $labels.instance }} is down"
-          description: "Prometheus has been unable to scrape job {{ $labels.job }} at {{ $labels.instance }} for 5 minutes."
+          summary: "Node unavailable for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The managed node exporter at {{ $labels.instance }} has been unavailable for 5 minutes."
+
+      - alert: ManagedPostgreSQLUnavailable
+        expr: up{job="client-postgres"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL unavailable for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The managed PostgreSQL exporter at {{ $labels.instance }} has been unavailable for 5 minutes."
+
+      - alert: ManagedHTTPSUnavailable
+        expr: |
+          probe_success{job="blackbox-https",managed_by="kimkom"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTPS unavailable for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The managed HTTPS endpoint {{ $labels.instance }} has failed its probe for 5 minutes."
 
       - alert: NodeFilesystemSpaceLow
         expr: |
           (
-            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_avail_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
             /
-            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_size_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
           ) < 0.15
           and
           (
-            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_avail_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
             /
-            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_size_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
           ) >= 0.05
           and on (instance, device, mountpoint)
-          node_filesystem_readonly == 0
+          node_filesystem_readonly{job="client-nodes"} == 0
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "Low disk space on {{ $labels.instance }}"
-          description: "Filesystem {{ $labels.mountpoint }} has less than 15% free space for 15 minutes."
+          summary: "Low disk space for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has less than 15% free space for 15 minutes."
 
       - alert: NodeFilesystemSpaceCritical
         expr: |
           (
-            node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_avail_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
             /
-            node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
+            node_filesystem_size_bytes{job="client-nodes",fstype!~"tmpfs|devtmpfs|overlay|squashfs",mountpoint!~"/run($|/.*)"}
           ) < 0.05
           and on (instance, device, mountpoint)
-          node_filesystem_readonly == 0
+          node_filesystem_readonly{job="client-nodes"} == 0
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Critically low disk space on {{ $labels.instance }}"
-          description: "Filesystem {{ $labels.mountpoint }} has less than 5% free space for 5 minutes."
+          summary: "Critically low disk space for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} has less than 5% free space for 5 minutes."
+
+      - alert: NodeMemoryCriticallyLow
+        expr: |
+          node_memory_MemAvailable_bytes{job="client-nodes"}
+          /
+          node_memory_MemTotal_bytes{job="client-nodes"} < 0.10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critically low memory for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "Available host memory on {{ $labels.instance }} is below 10% for 10 minutes."
+
+      - alert: NodeSwapPressure
+        expr: |
+          (
+            node_memory_SwapTotal_bytes{job="client-nodes"} > 0
+            and
+            1 - (
+              node_memory_SwapFree_bytes{job="client-nodes"}
+              /
+              node_memory_SwapTotal_bytes{job="client-nodes"}
+            ) > 0.80
+          )
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap pressure for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "More than 80% of swap is in use on {{ $labels.instance }} for 10 minutes."
+
+  - name: commandcenter-managed-containers
+    rules:
+      # cAdvisor exposes Docker Compose labels with the container_label_ prefix.
+      # The managed/client/environment labels are stable; name is not an
+      # ownership boundary because legacy containers can also use odoo-* names.
+      - alert: ManagedDevContainerMemoryNearLimit
+        expr: |
+          label_replace(
+            (
+              container_memory_working_set_bytes{job="cadvisor",image!="",container_label_com_kimkom_managed="true",container_label_com_kimkom_client!="",container_label_com_kimkom_environment="development"}
+              /
+              container_spec_memory_limit_bytes{job="cadvisor",image!="",container_label_com_kimkom_managed="true",container_label_com_kimkom_client!="",container_label_com_kimkom_environment="development"} > 0.90
+            )
+            and on (instance, name)
+            container_spec_memory_limit_bytes{job="cadvisor",image!="",container_label_com_kimkom_managed="true",container_label_com_kimkom_client!="",container_label_com_kimkom_environment="development"} > 0,
+            "client", "$1", "container_label_com_kimkom_client", "(.+)"
+          )
+        for: 10m
+        labels:
+          severity: warning
+          environment: development
+        annotations:
+          summary: "Dev container memory near limit for {{ $labels.client }}"
+          description: "Managed container {{ $labels.name }} is using more than 90% of its configured memory limit for 10 minutes."
+
+      - alert: ManagedDevContainerRestartLoop
+        expr: |
+          label_replace(
+            changes(container_start_time_seconds{job="cadvisor",image!="",container_label_com_kimkom_managed="true",container_label_com_kimkom_client!="",container_label_com_kimkom_environment="development"}[15m]) >= 3,
+            "client", "$1", "container_label_com_kimkom_client", "(.+)"
+          )
+        for: 5m
+        labels:
+          severity: critical
+          environment: development
+        annotations:
+          summary: "Dev container restart loop for {{ $labels.client }}"
+          description: "Managed container {{ $labels.name }} has restarted at least 3 times in 15 minutes."
 
   - name: commandcenter-probes
     rules:
@@ -62,8 +150,7 @@ groups:
       - alert: CertificateExpiresSoon
         expr: |
           probe_ssl_earliest_cert_expiry - time() < 30 * 24 * 60 * 60
-          and
-          probe_ssl_earliest_cert_expiry - time() >= 7 * 24 * 60 * 60
+          and probe_ssl_earliest_cert_expiry - time() >= 7 * 24 * 60 * 60
         for: 1h
         labels:
           severity: warning
@@ -88,8 +175,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Backup failed on {{ $labels.instance }}"
-          description: "The most recent KimKom backup-v2 operation failed."
+          summary: "Backup failed for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The most recent KimKom backup-v2 operation failed on {{ $labels.instance }}."
 
       - alert: KimKomBackupStale
         expr: time() - kimkom_backup_v2_backup_last_success_timestamp_seconds > 90 * 60
@@ -97,8 +184,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Backup is stale on {{ $labels.instance }}"
-          description: "No successful backup has completed within the 90-minute safety window."
+          summary: "Backup stale for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "No successful backup has completed within 90 minutes on {{ $labels.instance }}."
 
       - alert: KimKomBackupMetricsMissing
         expr: up{job="client-nodes"} == 1 unless on(instance) kimkom_backup_v2_backup_last_run_success
@@ -106,8 +193,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Backup metrics are missing on {{ $labels.instance }}"
-          description: "The client node is reachable but no backup-v2 status metric is present."
+          summary: "Backup metrics missing for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The managed node {{ $labels.instance }} is reachable but no backup-v2 status metric is present."
 
       - alert: KimKomRestoreVerificationFailed
         expr: kimkom_backup_v2_verify_last_run_success == 0
@@ -115,8 +202,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Restore verification failed on {{ $labels.instance }}"
-          description: "The most recent disposable restore verification failed."
+          summary: "Restore verification failed for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "The most recent disposable restore verification failed on {{ $labels.instance }}."
 
       - alert: KimKomRestoreVerificationStale
         expr: time() - kimkom_backup_v2_verify_last_success_timestamp_seconds > 35 * 24 * 60 * 60
@@ -124,5 +211,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Restore verification is stale on {{ $labels.instance }}"
-          description: "No successful disposable restore verification has completed in 35 days."
+          summary: "Restore verification stale for {{ $labels.client }} ({{ $labels.environment }})"
+          description: "No successful disposable restore verification has completed in 35 days on {{ $labels.instance }}."

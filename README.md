@@ -9,6 +9,15 @@ Central control plane for the KimKom agency. Hosts dev environments for all clie
 - **Purpose**: Development environment + control plane for all client PROD servers
 - **Clients**: SuperTCG, Vranckeneers (and future clients)
 
+Clean Phase 3 customers use the secret-free local inventory at
+`operations/customers.json` and `scripts/customer-ops.py`; GlitchTip DSNs stay
+in protected reference files. Prometheus targets are generated under managed
+file-SD directories, not appended to YAML. Portainer enrollment remains manual
+and pending until an observed endpoint ID is accepted. The clean dev generator
+currently denies this host on capacity unless an explicitly recorded override
+is approved. Legacy instances are not modified; Kubernetes and PITR are out of
+scope.
+
 ## Services on This Server
 
 ### Core Infrastructure
@@ -55,7 +64,7 @@ Separate GitHub repo deployed to each client's Hetzner server:
 ```bash
 # Start core services
 cd /opt/kimkom-commandcenter
-docker compose up -d
+docker compose --env-file .env up -d
 
 # Start monitoring (reads GRAFANA_PASSWORD and MANAGEMENT_BIND_IP)
 docker compose -f monitoring/docker-compose.yml --env-file .env up -d
@@ -66,6 +75,10 @@ docker compose up -d
 
 # Create new client dev instance
 ./scripts/create-odoo-instance.sh --client <name>
+
+# Clean-customer inventory lifecycle
+python3 scripts/customer-ops.py reserve <slug> --name "Customer Name"
+python3 scripts/customer-ops.py reconcile
 
 # Production deployment is managed from /opt/KimKom-stack.
 ```
