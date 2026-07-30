@@ -81,6 +81,8 @@ glitchtip/
 scripts/
   create-odoo-instance.sh         # scaffold new dev client: DB role, odoo.conf, compose, resource limits
   backup-commandcenter.sh          # daily Restic backup of all DBs, filestores, configs
+  update-modules.sh                # rsync Odoo modules over Tailscale, recovery point, odoo -u
+  install-monitoring.sh            # idempotent: add Prometheus exporters + targets to a production VM
   generate-alertmanager-config.sh  # inject Telegram secrets into alertmanager.yml from secrets/
   set-runtime-env.sh              # set management bind IPs
 systemd/
@@ -238,6 +240,24 @@ promtool check config monitoring/prometheus.yml
 promtool check rules monitoring/prometheus/rules/baseline.yml
 ```
 
+### Production — module updates
+
+```bash
+# Sync modules from CommandCenter to a customer VM, run odoo -u
+/opt/kimkom-commandcenter/scripts/update-modules.sh \
+    --slug kimkom-prod --target-ts-ip 100.114.91.105 \
+    --modules-source /opt/kimkom-modules/supertcg \
+    --upgrade-modules all
+```
+
+### Production — install monitoring on a new VM
+
+```bash
+# After init-client.sh finishes, connect the VM to Prometheus
+/opt/kimkom-commandcenter/scripts/install-monitoring.sh \
+    --client-slug kimkom-prod --target-ts-ip 100.114.91.105
+```
+
 ## Critical Rules
 
 ### Docker Compose
@@ -340,6 +360,7 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 - **Online backup is non-atomic**: the DB dump is consistent, but the filestore scan is not coordinated with it
 - **Restore verification is structural only**: it does not prove real Docker/PostgreSQL/Restic recovery
 - **No automatic rollback**: after a module upgrade failure, there is no automatic rollback or traffic cutover
+- **Pilot alerts are muted**: Critical availability rules (`ManagedNodeUnavailable`, `ManagedPostgreSQLUnavailable`, `ManagedHTTPSUnavailable`) filter on `environment="production"`. Alertmanager has a `mute` route for `environment != "production"` that catches anything else. Pilot targets (e.g. kimkom-prod on TEST VM) will not page.
 - **Transient alerts**: 2 alerts may fire after a container restart (auto-resolve)
 - **Telegram bot token exposure**: the token was in git history — now untracked but not yet rotated
 - **CI deploy key**: the `KIMKOM_MODULES_DEPLOY_KEY` secret must be configured in GitHub Actions

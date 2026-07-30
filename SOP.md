@@ -128,15 +128,11 @@ cd /opt/KimKom-stack
 
 ### Step 2 — Add Prometheus targets on CommandCenter
 
-After provisioning completes, edit:
-- `monitoring/prometheus/targets/nodes.yml`
-- `monitoring/prometheus/targets/postgres.yml`
-- `monitoring/blackbox/targets/https.yml`
-
-Then restart Prometheus:
+After provisioning completes, run:
 
 ```bash
-docker compose -f monitoring/docker-compose.yml --env-file .env restart prometheus
+/opt/kimkom-commandcenter/scripts/install-monitoring.sh \
+    --client-slug <slug> --target-ts-ip <ts-ip>
 ```
 
 ### Step 3 — Add server to Portainer
@@ -215,6 +211,13 @@ sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh apply --id <I
 
 This restores the paired DB+filestore plus the exact prior image and SHA. Odoo stays unavailable on failure.
 
+**Apply notes (post-2026-07-30):**
+- `apply` runs `pg_terminate_backend()` before `dropdb` so postgres-exporter and other monitoring connections don't block the drop
+- `apply` issues `--no-build` on the bring-up so locally-built images can be used without a registry
+- `apply` pre-checks the prior image is present locally; if it is not (e.g. pruned), the apply refuses with a clear error
+- The Odoo health check has a 600-second budget (raised from 300s after slow cold starts on low-memory VMs); on timeout it dumps container state, OOMKilled, and last 40 lines of logs
+- The registry verification step uses `docker compose run --rm` (not `exec`) so the in-container `odoo --stop-after-init` does not conflict with the running Odoo process on port 8069
+
 ### CommandCenter backup
 
 Daily Restic backup to a local repo. Timer at 00:01 UTC:
@@ -269,6 +272,11 @@ docker compose -f monitoring/docker-compose.yml --env-file .env up -d --force-re
 - Backup failure or staleness
 - Restore verification failure
 - Managed dev container near memory limit or restarting
+
+**Alert routing architecture (post-2026-07-30):**
+- Critical availability rules (`ManagedNodeUnavailable`, `ManagedPostgreSQLUnavailable`, `ManagedHTTPSUnavailable`) match only `environment="production"`. Pilot targets (e.g. kimkom-prod TEST VM `environment="pilot"`) never trigger these.
+- Alertmanager has a mute route for `environment != "production"` that catches any other alerts before they reach the Telegram critical route. The `mute` receiver is a no-op.
+- All environment labels come from `monitoring/prometheus/targets/{nodes,postgres,http,https}.yml`. Set the label explicitly per target.
 
 ---
 
