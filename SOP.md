@@ -277,10 +277,10 @@ docker compose -f monitoring/docker-compose.yml --env-file .env up -d --force-re
 1. Create the module under `/opt/kimkom-modules/<client-slug>/<module_name>/`
 2. Dev containers mount this path read-only — test directly
 3. Commit and push to the `kimkom-modules` repo
-4. CI (on push to `main`) checks out `kimkom-modules`, copies `<client-slug>/` into `odoo/modules/`, builds the image, and pushes to GHCR as `ghcr.io/alex12358795/kimkom-prod-odoo:<sha>`
-5. Deploy with `update.sh`, passing the module in `--upgrade-modules`
+4. Deploy with `scripts/update-modules.sh` (rsync over Tailscale, recovery point, atomic swap, `odoo -u`)
+5. CI image builds are manual-only (`workflow_dispatch`) — triggered for Odoo version bumps or Python dep changes
 
-Enterprise and OCA modules are runtime mounts on the production server (`addons-enterprise/`, `addons-oca/` directories), not baked into the image.
+Enterprise, OCA, and shared modules are runtime mounts on the production server (`addons-enterprise/`, `addons-oca/` directories), not rsynced each update.
 
 ---
 

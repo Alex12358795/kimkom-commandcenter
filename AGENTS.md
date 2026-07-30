@@ -112,7 +112,7 @@ odoo/
   entrypoint.sh                     # rewrites odoo.conf placeholders at startup
   odoo.conf                         # template with __PLACEHOLDER__ values
   requirements.lock                 # pinned Python deps
-  modules/                          # CI-populated: client module directory baked into image
+  modules/                          # scratch: CI may push built artifacts here (ignored by git)
     kimkom-prod/README.md           # placeholder
     enterprise/README.md            # placeholder (supplied by private build)
     oca/sentry/                     # OCA sentry module for GlitchTip integration
@@ -143,7 +143,7 @@ systemd/
 lib/
   client-config.sh                  # shared validation for slugs, paths, domains
 .github/workflows/
-  immutable-image.yml               # CI: checkout kimkom-modules → copy client folder → build → push to GHCR
+  immutable-image.yml               # CI: workflow_dispatch manual trigger only (image rebuilds are rare)
 .env.example                        # template for $STACK_ROOT/.env (mode 0600)
 README.md
 BACKUP-V2.md                        # backup design and operational contract
@@ -159,11 +159,17 @@ The platform uses a two-tier module model:
 | Client | `/opt/kimkom-modules/<client-slug>/` | Only that client |
 | Shared | `/opt/kimkom-modules/shared/` | Available to all clients |
 
+Modules are deployed via **rsync over Tailscale**, not baked into the Odoo image.
+The image is rebuilt only for Odoo version bumps or Python dependency changes.
+
 1. Develop modules in `/opt/kimkom-modules/<client-slug>/` (dev containers mount read-only)
 2. Commit and push to the `kimkom-modules` repo
-3. CI checks out `kimkom-modules`, copies the `<client-slug>/` folder into `odoo/modules/`, builds the image, and pushes to GHCR
-4. Deploy with `update.sh --target-image <image@sha256:digest> --upgrade-modules module1,module2`
-5. Enterprise and OCA modules are runtime mounts on the production server, not baked into the image
+3. Deploy with `scripts/update-modules.sh` on CommandCenter:
+   - rsyncs modules to the customer VM over Tailscale
+   - Creates a quiesced recovery point before swapping
+   - Atomically swaps modules, runs `odoo -u`, health check
+4. CI image builds are **manual only** (`workflow_dispatch`) — no trigger on push
+5. Enterprise, OCA, and shared modules are runtime mounts on the production server, not rsynced each update
 
 ## Key Commands
 
