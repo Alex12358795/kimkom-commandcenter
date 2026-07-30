@@ -136,14 +136,11 @@ if [[ ! -x "$recovery/recovery-point.sh" ]]; then
     echo "SKIP: recovery-point.sh not installed on target" >&2
     exit 0
 fi
-if [[ $EUID -ne 0 ]]; then
-    # Elevate to root; recovery-point.sh requires root for Restic/DB access.
-    exec sudo -n bash -s -- "$@"
-fi
 old_sha=$(git -C "$stack" rev-parse HEAD 2>/dev/null || echo unknown)
 current=$(docker compose -f "$stack/docker-compose.yaml" --env-file "$stack/.env" ps -q odoo 2>/dev/null | awk 'NF{print;exit}')
 old_image=$(docker inspect --format='{{index .Config.Image}}' "$current" 2>/dev/null || echo unknown)
-"$recovery/recovery-point.sh" create \
+# sudo required: recovery-point.sh needs Restic and DB access.
+sudo -n "$recovery/recovery-point.sh" create \
     --expected-git-sha "$old_sha" \
     --expected-image "$old_image" \
     --modules "$modules"
