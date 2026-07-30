@@ -184,7 +184,7 @@ cd "$stack"
 docker compose -f docker-compose.yaml --env-file .env stop odoo
 docker compose -f docker-compose.yaml --env-file .env run --rm -T odoo \
     odoo -u "$modules" --stop-after-init --no-http </dev/null
-docker compose -f docker-compose.yaml --env-file .env up -d --no-deps --force-recreate odoo
+docker compose -f docker-compose.yaml --env-file .env up -d --no-build --no-deps --force-recreate odoo
 container=$(docker compose -f docker-compose.yaml --env-file .env ps -q odoo | awk 'NF{print;exit}')
 for i in $(seq 1 60); do
     status=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo unknown)
