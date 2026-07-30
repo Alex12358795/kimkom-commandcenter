@@ -2,7 +2,7 @@ groups:
   - name: commandcenter-baseline
     rules:
       - alert: ManagedNodeUnavailable
-        expr: up{job="client-nodes"} == 0
+        expr: up{job="client-nodes",environment="production"} == 0
         for: 5m
         labels:
           severity: critical
@@ -11,7 +11,7 @@ groups:
           description: "The managed node exporter at {{ $labels.instance }} has been unavailable for 5 minutes."
 
       - alert: ManagedPostgreSQLUnavailable
-        expr: up{job="client-postgres"} == 0
+        expr: up{job="client-postgres",environment="production"} == 0
         for: 5m
         labels:
           severity: critical
@@ -21,7 +21,7 @@ groups:
 
       - alert: ManagedHTTPSUnavailable
         expr: |
-          probe_success{job="blackbox-https"} == 0
+          probe_success{job="blackbox-https",environment="production"} == 0
         for: 5m
         labels:
           severity: critical

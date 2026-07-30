@@ -8,12 +8,19 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # Pilot alerts: catch and discard regardless of severity.
+    # Production targets use environment="production"; pilot/lab
+    # should never reach the pager.
+    - matchers:
+        - environment != "production"
+      receiver: "mute"
     - matchers:
         - severity = "critical"
       receiver: "telegram"
       continue: true
 
 receivers:
+  - name: "mute"
   - name: "telegram"
     telegram_configs:
       - bot_token: "__TELEGRAM_BOT_TOKEN__"
