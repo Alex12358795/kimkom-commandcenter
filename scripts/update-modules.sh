@@ -136,7 +136,10 @@ if [[ ! -x "$recovery/recovery-point.sh" ]]; then
     echo "SKIP: recovery-point.sh not installed on target" >&2
     exit 0
 fi
-# Get current state to record as expected.
+if [[ $EUID -ne 0 ]]; then
+    # Elevate to root; recovery-point.sh requires root for Restic/DB access.
+    exec sudo -n bash -s -- "$@"
+fi
 old_sha=$(git -C "$stack" rev-parse HEAD 2>/dev/null || echo unknown)
 current=$(docker compose -f "$stack/docker-compose.yaml" --env-file "$stack/.env" ps -q odoo 2>/dev/null | awk 'NF{print;exit}')
 old_image=$(docker inspect --format='{{index .Config.Image}}' "$current" 2>/dev/null || echo unknown)
@@ -167,8 +170,8 @@ fi
 mv "$dst.staging" "$dst"
 rm -rf "$dst.old"
 # Odoo runs as uid 100 inside the container.
-chown -R 100:101 "$dst"
-chmod -R u+rwX,go+rX "$dst"
+sudo chown -R 100:101 "$dst"
+sudo chmod -R u+rwX,go+rX "$dst"
 echo "modules dir swapped and chowned"
 REMOTE
 
