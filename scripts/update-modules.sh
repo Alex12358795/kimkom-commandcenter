@@ -136,9 +136,11 @@ if [[ ! -x "$recovery/recovery-point.sh" ]]; then
     echo "SKIP: recovery-point.sh not installed on target" >&2
     exit 0
 fi
+# shellcheck source=/dev/null
+source "$recovery/common.sh" 2>/dev/null || true
 old_sha=$(git -C "$stack" rev-parse HEAD 2>/dev/null || echo unknown)
 current=$(docker compose -f "$stack/docker-compose.yaml" --env-file "$stack/.env" ps -q odoo 2>/dev/null | awk 'NF{print;exit}')
-old_image=$(docker inspect --format='{{index .Config.Image}}' "$current" 2>/dev/null || echo unknown)
+old_image=$(container_repo_digests "$current" 2>/dev/null | awk 'NF{print;exit}' || docker inspect --format='{{index .RepoDigests 0}}' "$current" 2>/dev/null || echo unknown)
 # sudo required: recovery-point.sh needs Restic and DB access.
 sudo -n "$recovery/recovery-point.sh" create \
     --expected-git-sha "$old_sha" \
