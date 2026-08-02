@@ -1,6 +1,6 @@
 {
-  "uid": "kimkom-backup-v2",
-  "title": "Backup v2 \u2013 Status",
+  "uid": "kimkom-backup",
+  "title": "Backup \u2013 Status",
   "tags": [
     "backup",
     "kimkom"
@@ -21,7 +21,7 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "query": "label_values(kimkom_backup_v2_backup_last_run_success, instance)",
+        "query": "label_values(kimkom_backup_backup_last_run_success, instance)",
         "multi": true,
         "includeAll": true,
         "refresh": 1,
@@ -45,7 +45,7 @@
       },
       "targets": [
         {
-          "expr": "kimkom_backup_v2_backup_last_run_success{instance=~\"$instance\"}",
+          "expr": "kimkom_backup_backup_last_run_success{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -91,7 +91,7 @@
       },
       "targets": [
         {
-          "expr": "kimkom_backup_v2_verify_last_run_success{instance=~\"$instance\"}",
+          "expr": "kimkom_backup_verify_last_run_success{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -137,7 +137,7 @@
       },
       "targets": [
         {
-          "expr": "time() - kimkom_backup_v2_backup_last_success_timestamp_seconds{instance=~\"$instance\"}",
+          "expr": "time() - kimkom_backup_backup_last_success_timestamp_seconds{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -159,7 +159,7 @@
       },
       "targets": [
         {
-          "expr": "time() - kimkom_backup_v2_verify_last_success_timestamp_seconds{instance=~\"$instance\"}",
+          "expr": "time() - kimkom_backup_verify_last_success_timestamp_seconds{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -181,7 +181,7 @@
       },
       "targets": [
         {
-          "expr": "kimkom_backup_v2_backup_last_duration_seconds{instance=~\"$instance\"}",
+          "expr": "kimkom_backup_backup_last_duration_seconds{instance=~\"$instance\"}",
           "legendFormat": "{{instance}}"
         }
       ],
@@ -203,7 +203,7 @@
       },
       "targets": [
         {
-          "expr": "kimkom_backup_v2_backup_last_completion_timestamp_seconds{instance=~\"$instance\"} * 1000",
+          "expr": "kimkom_backup_backup_last_completion_timestamp_seconds{instance=~\"$instance\"} * 1000",
           "format": "table",
           "instant": true
         }
