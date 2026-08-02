@@ -129,16 +129,26 @@ Gather everything below **before** running `init-client.sh`:
 | 9 | Odoo image | Immutable digest `kimkom/odoo-local@sha256:<digest>` — built locally (Step 3) or pulled from GHCR |
 | 10 | GlitchTip DSN (optional) | Existing project DSN via `--glitchtip-dsn` to enable the Odoo Sentry module |
 
-### Step 1 — Tailscale bootstrap (manual, on the new server)
+### Step 1 — Tailscale bootstrap (operator-side, from CommandCenter)
+
+Run the dedicated bootstrap script — it installs Tailscale, enrolls the node,
+verifies the join (default route + DNS unchanged, node pingable over the mesh),
+and prints the Tailscale IP for `init-client.sh --server`:
 
 ```bash
-ssh <user>@<server-ip>
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up --authkey=<tskey>
+cd /opt/KimKom-stack
+./scripts/bootstrap-tailscale.sh \
+  --server <public-ip> \          # bootstrap ONLY — all later access is over Tailscale
+  --hostname <client-slug> \
+  --auth-key tskey-auth-... \     # operator-generated; or file:<path>
+  --ssh-user root \
+  --ssh-key <bootstrap-key>
 ```
 
-Verify the node joins your tailnet: `tailscale status` on the new server, or
-`tailscale ping <ts-ip>` from the CommandCenter.
+The script is idempotent (an already-enrolled node is detected and kept) and
+safely refuses to enroll if Tailscale would hijack the server's default route
+or DNS. Verify manually if you prefer: `tailscale ping <ts-ip>` from the
+CommandCenter.
 
 ### Step 2 — GitHub deploy key for the private clone
 
