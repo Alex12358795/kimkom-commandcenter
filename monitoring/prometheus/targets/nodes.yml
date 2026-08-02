@@ -1,6 +1,9 @@
-- targets:
+# Placeholder for client scrape targets. Entries are appended by
+# install-monitoring.sh (pilot) or init-client.sh phase 10 (production).
+# Use CLIENT-REMOVAL.md to remove entries when a client is decommissioned or
+# its VM is repurposed.- targets:
     - "100.114.91.105:9100"
   labels:
-    client: "kimkom-prod"
+    client: "vranckeneers-prod"
     environment: "pilot"
     transport: "tailscale"

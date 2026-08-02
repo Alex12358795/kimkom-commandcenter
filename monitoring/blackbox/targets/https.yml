@@ -8,10 +8,3 @@
   labels:
     environment: "development"
     owner: "kimkom"
-
-- targets:
-    - "https://kimkom-prod.kimkom.net/"
-  labels:
-    client: "kimkom-prod"
-    environment: "pilot"
-    owner: "kimkom"
