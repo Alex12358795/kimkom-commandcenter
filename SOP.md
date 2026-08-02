@@ -29,12 +29,13 @@ Operator runbook for the KimKom platform. Day-to-day operations: adding clients,
 | TEST VM | Production pilot (kimkom-prod) | 192.168.178.20 | 100.114.91.105 |
 
 - **CommandCenter** is a Proxmox VM at home. Runs Traefik, shared PostgreSQL, Portainer, Prometheus, Grafana, Alertmanager, Loki, Promtail, and GlitchTip.
-- **TEST VM** hosts the KimKom-stack at `/opt/kimkom-kimkom-prod`. Serves as the production pilot for the `kimkom-prod` customer.
+- **TEST VM** (100.114.91.105) hosts KimKom-stack pilots. As of 2026-08-02 it runs the `vranckeneers-prod` fake client, which was used to prove the fresh-client onboarding flow end-to-end (Section 4); it previously hosted `kimkom-prod`.
 - **Clients:**
   - SuperTCG (legacy)
   - Vranckeneers (legacy)
   - kimkom-dev (legacy)
-  - kimkom-prod (TEST pilot)
+  - kimkom-prod (superseded TEST pilot)
+  - vranckeneers-prod (TEST pilot — E2E drill client as of 2026-08-02)
 - **Legacy instances MUST NOT be modified.** They retain their instance-local mounts.
 - **New dev instances** are created with `create-odoo-instance.sh` and mount modules from `/opt/kimkom-modules`.
 
@@ -106,56 +107,181 @@ The instance will be available at `https://<name>.kimkom.net`.
 
 ## 4. Adding a New Production Customer
 
-### Prerequisites
+> **Status: verified end-to-end** in the 2026-08-02 drills on the TEST VM
+> (100.114.91.105, fake client `vranckeneers-prod`). The flow below matches the
+> tooling exactly — flags, phases, and validation order come from
+> `KimKom-stack/init-client.sh` and `scripts/phases/phase-lib.sh`.
 
-- Dedicated server with Ubuntu and Docker installed
-- GitHub deploy key for KimKom-stack (if private repo clone is needed)
-- DNS: domain and `*.domain` pointing to the server IP
-- S3 bucket credentials for backups
-- Tailscale auth key
-- Odoo image from GHCR: `ghcr.io/alex12358795/kimkom-prod-odoo@sha256:...`
-- Off-host backup escrow reference
+### Pre-flight checklist (operator prerequisites)
 
-### Step 1 — Provision from the controller (clean checkout required)
+Gather everything below **before** running `init-client.sh`:
+
+| # | Item | How to obtain / verify |
+|---|---|---|
+| 1 | Dedicated server (Ubuntu + Docker) | Reachable over SSH; ports 80/443 free for TLS production |
+| 2 | Tailscale authkey | `https://login.tailscale.com/admin/settings/keys` → generate; pre-auth the node |
+| 3 | Per-customer GitHub deploy key for KimKom-stack | See **Step 2** below |
+| 4 | S3 bucket + credentials | Hetzner Object Storage: bucket `<slug>-prod`, dedicated backup access key/secret; credentials file will be installed to `/etc/kimkom-backup/aws-credentials` |
+| 5 | Restic repository | `RESTIC_REPOSITORY` env override, or the default `s3:https://fsn1.your-objectstorage.com/<namespace>-prod` (verify the current Hetzner endpoint — `.de` vs `.com` — against today's Hetzner docs) |
+| 6 | Restic password | `--restic-pass` (installed to `/etc/kimkom-backup/restic-password`) |
+| 7 | Domain DNS | A record for `<domain>` and `*.domain` → public IP; `dns-preflight` phase verifies this |
+| 8 | Escrow reference | Non-secret off-host record of the S3 repo + Restic password location (`--backup-escrow-reference`) |
+| 9 | Odoo image | Immutable digest `kimkom/odoo-local@sha256:<digest>` — built locally (Step 3) or pulled from GHCR |
+| 10 | GlitchTip DSN (optional) | Existing project DSN via `--glitchtip-dsn` to enable the Odoo Sentry module |
+
+### Step 1 — Tailscale bootstrap (manual, on the new server)
+
+```bash
+ssh <user>@<server-ip>
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up --authkey=<tskey>
+```
+
+Verify the node joins your tailnet: `tailscale status` on the new server, or
+`tailscale ping <ts-ip>` from the CommandCenter.
+
+### Step 2 — GitHub deploy key for the private clone
+
+Phase `01-git-clone` needs a **distinct per-customer GitHub deploy key** to clone
+the private `KimKom-stack` repo. The CommandCenter's own deploy key
+(`/opt/kimkom-commandcenter/ssh/deploy_key`) is intentionally NOT usable for this
+and `install.sh` refuses to copy it — the drill workaround (git bundle + local
+bare repo) is for drills only, never production.
+
+Production procedure:
+
+```bash
+# On CommandCenter, generate a per-customer keypair (no passphrase)
+ssh-keygen -t ed25519 -f ~/.ssh/id_kimkom_github_<slug> -N ""
+```
+
+1. Add `~/.ssh/id_kimkom_github_<slug>.pub` to the KimKom-stack GitHub repo:
+   Settings → Deploy keys → Add deploy key (read-only).
+2. Pass the **private key path** to `init-client.sh` via `--github-deploy-key-file <path>`.
+
+### Step 3 — Build and deliver the Odoo image
+
+The image is built on the CommandCenter and shipped to the target over SSH
+(docker save/load — no registry needed):
 
 ```bash
 cd /opt/KimKom-stack
-./init-client.sh --server <public-ip> --client "Customer Name" --client-slug <slug> \
-  --domain <domain> --odoo-image <image@sha256:digest> \
-  --backup-s3-key <key> --backup-s3-secret <secret> \
-  --backup-escrow-reference <off-host-ref> --tailscale-token <tskey>
+docker build --tag kimkom/odoo-local:latest \
+    --build-arg CLIENT_SLUG=<slug> \
+    -f odoo/Dockerfile odoo/
+
+# Deliver the image to the target VM
+docker save kimkom/odoo-local:latest | ssh -C <user>@<ts-ip> docker load
+
+# Record the digest for --odoo-image
+ssh <user>@<ts-ip> 'docker images kimkom/odoo-local --digests'
 ```
 
-### Step 2 — Add Prometheus targets on CommandCenter
+> Production note: GHCR-hosted immutable images (`ghcr.io/alex12358795/...`)
+> are the long-term path; the local build + `docker save | ssh docker load`
+> flow is what the drills proved. For `--allow-local-build` runs the digest is
+> resolved from the locally built image.
 
-After provisioning completes, run:
+### Step 4 — Provision (init-client.sh, 11 phases, resumable)
+
+Run from a clean checkout of `KimKom-stack`:
+
+```bash
+cd /opt/KimKom-stack
+./init-client.sh --server <ts-ip> \
+  --client "<Name>" \
+  --client-slug <slug> \
+  --domain <domain> \
+  --odoo-image "kimkom/odoo-local@sha256:<digest>" \
+  --backup-s3-key <key> --backup-s3-secret <secret> \
+  --backup-escrow-reference <off-host-ref> \
+  --restic-pass <password> \
+  --github-deploy-key-file ~/.ssh/id_kimkom_github_<slug> \
+  --tailscale-token <tskey> \
+  --commandcenter-ip 100.67.52.95 \
+  --ssh-user alex \
+  --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key \
+  --non-interactive
+```
+
+The 11 phases run in order (each is a phase script in `scripts/phases/`):
+
+`00-server-bootstrap`, `01-git-clone`, `02-tailscale`, `03-directories`,
+`04-env-setup`, `05-dns-preflight`, `06-odoo-init`, `07-full-stack`,
+`08-health-check`, `09-backup-setup`, `10-monitoring-onboard`
+
+**Resumability / state flags** (verified in the drills):
+
+- `--resume` — continue a failed run from the last completed phase (required
+  when remote provisioning state already exists)
+- `--force-phase <name>` — re-run a phase **and everything downstream**
+  (e.g. `--force-phase full-stack` re-runs full-stack + health-check +
+  backup-setup + monitoring-onboard); re-run the full command with the flag
+- `--reset-state` — clear provisioning state only (never combine with
+  `--resume` or `--force-phase`)
+
+**Restic repository override** — `RESTIC_REPOSITORY` is an env override,
+default-only since `73aebd3`:
+
+```bash
+RESTIC_REPOSITORY=/var/lib/kimkom-test-repo ./init-client.sh ...
+```
+
+For production, leave it unset (defaults to
+`s3:https://fsn1.your-objectstorage.com/<namespace>-prod`) or set it explicitly
+to the customer bucket.
+
+**Pilot-only flags — NEVER for production:**
+
+- `--local-http` — uses `docker-compose.local.yml` (HTTP-only, no TLS, insecure
+  dashboard bound to 127.0.0.1:8080). Drill/pilot only. Note: on `--local-http`
+  hosts the recovery/update tooling now honors `docker-compose.local.yml`
+  automatically (commits `2314014`, `99b8234`) — no manual override
+  re-application is needed.
+- `--allow-local-build` — explicitly allows a locally built image; requires
+  `--odoo-image` to be an immutable `sha256` digest. Use for disposable pilots
+  only.
+
+### Step 5 — Add monitoring on the CommandCenter
 
 ```bash
 /opt/kimkom-commandcenter/scripts/install-monitoring.sh \
     --client-slug <slug> --target-ts-ip <ts-ip>
 ```
 
-### Step 3 — Add server to Portainer
+Idempotent: adds node/postgres Prometheus targets and blackbox probes without
+duplicating entries. Re-run any time to re-apply.
 
-Manually add the server at http://100.67.52.95:9000 → Environments → Add.
+### Step 6 — Post-provisioning verification checklist (7 checks)
 
-### Step 4 — Create a GlitchTip project
+Run all seven after `install-monitoring.sh`:
 
-Create a GlitchTip project for the customer at http://100.67.52.95:8001.
+1. **Compose healthy** — `ssh <user>@<ts-ip> 'cd /opt/kimkom-<slug> && docker compose -f docker-compose.yaml --env-file .env ps'` → all services `healthy`/`Up`
+2. **HTTP 200** — on `--local-http`: `curl -H "Host: <domain>" http://<ts-ip>/` → 200
+3. **Prometheus targets up** — both `client-nodes` (9100) and `client-postgres` (9187) report `up=1` on the CommandCenter
+4. **DB modules ≥ 12** — `docker exec <odoo-container> odoo shell -d <db> --no-http -c 'print(len(env["ir.module.module"].search([("state","=","installed")])))'` (or psql `ir_module_module` count) → ≥ 12
+5. **Backup pipeline** — 4 timers active (`kimkom-backup.timer`, `-retention`, `-check`, `-verify`) **and** `sudo /usr/local/libexec/kimkom-backup/backup.sh` exits 0 **and** `kimkom_backup_backup_last_run_success == 1` in Prometheus
+6. **Recovery point** — `sudo /usr/local/libexec/kimkom-backup/recovery-point.sh create` succeeds and Odoo is healthy afterward (this is C3 pre-validation; applies on `--local-http` hosts too)
+7. **Zero firing alerts** — `curl -sS http://127.0.0.1:9090/api/v1/alerts | jq '[.data.alerts[] | select(.state=="firing")] | length'` → 0
 
-### Provisioning phases
+### Step 7 — Manual service additions
 
-`server-bootstrap`, `git-clone`, `tailscale`, `directories`, `env-setup`, `dns-preflight`, `odoo-init`, `full-stack`, `health-check`, `backup-setup`, `monitoring-onboard`.
+- **Portainer**: add the server at http://100.67.52.95:9000 → Environments →
+  Add. Manual by design (phase `10-monitoring-onboard` prints the instructions;
+  the Portainer agent must listen on `9001`).
+- **GlitchTip project** (optional): create at http://100.67.52.95:8001 and pass
+  the DSN via `--glitchtip-dsn` on provisioning (or add `GLITCHTIP_DSN` to the
+  stack `.env` later).
 
-### Flags
+### Known gaps (documented, not yet fixed in code)
 
-- `--resume` — continue a failed run
-- `--force-phase <name>` — re-run a single phase
-- `--reset-state` — clear provisioning state
-- `--glitchtip-dsn <dsn>` — supply a GlitchTip DSN
-- `--github-deploy-key-file <path>` — GitHub deploy key for private repo clone
-- `--tailscale-token <key>` — Tailscale auth key
-- `--commandcenter-ip <ip>` — CommandCenter Tailscale IP
+- **Fresh private clone needs a per-customer GitHub deploy key** (Step 2). There
+  is no shared-key fallback; a first-time deploy on a brand-new server cannot
+  skip this.
+- **S3 details must be confirmed per deploy**: bucket `<slug>-prod`, endpoint
+  region (verify current Hetzner Object Storage docs — `.de` vs `.com`), and
+  that `RESTIC_REPOSITORY` matches.
+- **Portainer and GlitchTip onboarding have no automation** — manual by design.
 
 ---
 
@@ -178,6 +304,10 @@ This:
 6. Verifies image identity and health
 
 **On failure:** Odoo stays stopped. Use the manual restore procedure in Section 6. There is NO automatic rollback.
+
+**Compose-drift note:** on `--local-http` hosts, the update/recovery tooling
+honors `docker-compose.local.yml` automatically (commits `2314014`, `99b8234`)
+— no manual override re-application is needed after an update or restore.
 
 ---
 
@@ -211,12 +341,13 @@ sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh apply --id <ID> 
 
 This restores the paired DB+filestore plus the exact prior image and SHA. Odoo stays unavailable on failure.
 
-**Apply notes (post-2026-07-30):**
+**Apply notes (post-2026-07-30, re-verified 2026-08-02 drills):**
 - `apply` runs `pg_terminate_backend()` before `dropdb` so postgres-exporter and other monitoring connections don't block the drop
 - `apply` issues `--no-build` on the bring-up so locally-built images can be used without a registry
 - `apply` pre-checks the prior image is present locally; if it is not (e.g. pruned), the apply refuses with a clear error
 - The Odoo health check has a 600-second budget (raised from 300s after slow cold starts on low-memory VMs); on timeout it dumps container state, OOMKilled, and last 40 lines of logs
 - The registry verification step uses `docker compose run --rm` (not `exec`) so the in-container `odoo --stop-after-init` does not conflict with the running Odoo process on port 8069
+- **C3 S3 pre-validation** (`recovery-point.sh create` checks Restic S3 reachability before writing a recovery point) runs as part of verification checklist check 6 — confirmed working in the drills; on `--local-http` hosts the `docker-compose.local.yml` override is honored automatically
 
 ### CommandCenter backup
 
@@ -274,9 +405,22 @@ docker compose -f monitoring/docker-compose.yml --env-file .env up -d --force-re
 - Managed dev container near memory limit or restarting
 
 **Alert routing architecture (post-2026-07-30):**
-- Critical availability rules (`ManagedNodeUnavailable`, `ManagedPostgreSQLUnavailable`, `ManagedHTTPSUnavailable`) match only `environment="production"`. Pilot targets (e.g. kimkom-prod TEST VM `environment="pilot"`) never trigger these.
+- Critical availability rules (`ManagedNodeUnavailable`, `ManagedPostgreSQLUnavailable`, `ManagedHTTPSUnavailable`) match only `environment="production"`. Pilot targets (e.g. vranckeneers-prod TEST VM `environment="pilot"`) never trigger these.
 - Alertmanager has a mute route for `environment != "production"` that catches any other alerts before they reach the Telegram critical route. The `mute` receiver is a no-op.
 - All environment labels come from `monitoring/prometheus/targets/{nodes,postgres,http,https}.yml`. Set the label explicitly per target.
+
+**Backup monitoring surface (post-rename, re-verified 2026-08-02):**
+- Metric names are `kimkom_backup_*` (no `_v2_`): `kimkom_backup_backup_last_run_success`,
+  `kimkom_backup_backup_last_success_timestamp_seconds`,
+  `kimkom_backup_backup_last_duration_seconds`,
+  `kimkom_backup_backup_last_completion_timestamp_seconds`,
+  `kimkom_backup_verify_last_run_success`, `kimkom_backup_verify_last_success_timestamp_seconds`
+- Grafana dashboard: **"Backup – Status"** (uid `kimkom-backup`), provisioned at
+  `monitoring/grafana/provisioning/dashboards/backup.json`
+- Alert rules in `monitoring/prometheus/rules/baseline.yml` reference the
+  `kimkom_backup_*` names: `KimKomBackupFailed`, `KimKomBackupStale`,
+  `KimKomBackupMetricsMissing`, `KimKomRestoreVerificationFailed`,
+  `KimKomRestoreVerificationStale`
 
 ---
 
@@ -296,7 +440,10 @@ Enterprise, OCA, and shared modules are runtime mounts on the production server 
 
 - **CommandCenter:** Cloudflare Tunnel routes `*.kimkom.net` to `192.168.178.19:80`. Traefik is HTTP-only — no Let's Encrypt on the controller.
 - **Production:** Traefik auto-provisions Let's Encrypt. DNS must have A records for the domain and `*.domain`. Ports 80 and 443 must be open.
-- **kimkom-prod.kimkom.net** currently points to the TEST VM at `192.168.178.20`.
+- **Pilots:** drill domains (e.g. the vranckeneers-prod drill) use `--local-http`
+  and HTTP-only probes — no public DNS required. `kimkom-prod.kimkom.net`
+  previously pointed at the TEST VM; the TEST VM currently hosts the
+  vranckeneers-prod drill client.
 
 ---
 
@@ -326,6 +473,22 @@ Enterprise, OCA, and shared modules are runtime mounts on the production server 
 - Verify S3 credentials and Restic password files
 - Check Restic repo: `sudo restic -r <repo> snapshots`
 
+### Fresh-clone provisioning fails at git-clone (phase 01)
+
+- Phase `01-git-clone` requires a **distinct per-customer GitHub deploy key**
+  (`--github-deploy-key-file`). `install.sh` refuses to copy the CommandCenter
+  deploy key, and a bare-repo/bundle workaround is drill-only.
+- Generate `ssh-keygen -t ed25519 -f ~/.ssh/id_kimkom_github_<slug> -N ""`, add
+  the `.pub` as a read-only Deploy key on the KimKom-stack GitHub repo, then
+  re-run `init-client.sh` with `--resume --github-deploy-key-file ~/.ssh/id_kimkom_github_<slug>`.
+
+### S3 / Restic repository mismatch
+
+- `RESTIC_REPOSITORY` defaults to
+  `s3:https://fsn1.your-objectstorage.com/<namespace>-prod`. If the bucket lives
+  in another region or the Hetzner endpoint changed (verify `.de` vs `.com` in
+  the current docs), set `RESTIC_REPOSITORY` explicitly as an env override.
+
 ### Portainer agent not connecting
 
 - Agent must use `ports: "9001:9001"`, NOT `expose: 9001`
@@ -349,6 +512,7 @@ Enterprise, OCA, and shared modules are runtime mounts on the production server 
 | GlitchTip admin | `glitchtip/.env` | 0600 |
 | Instance DB passwords | `instances/<client>/.env` | 0640 |
 | Deploy SSH key | `ssh/deploy_key` | 0600 |
+| Per-customer GitHub deploy key (KimKom-stack clone) | `~/.ssh/id_kimkom_github_<slug>` (on CommandCenter) | 0600 |
 | GlitchTip API token | `secrets/commandcenter/glitchtip-api-token` | 0600 |
 | CommandCenter Restic password | `secrets/commandcenter/restic-password` | 0600 |
 | Alertmanager secrets | `secrets/commandcenter/alertmanager-secrets` | 0600 |

@@ -9,7 +9,7 @@ Central control plane for the KimKom platform. Hosts dev Odoo instances, monitor
 | Node | Role | LAN IP | Tailscale IP |
 |---|---|---|---|
 | CommandCenter | Dev hosting, monitoring, GlitchTip, Portainer, backups | 192.168.178.19 | 100.67.52.95 |
-| TEST | Production pilot — KimKom-stack at `/opt/kimkom-kimkom-prod` | 192.168.178.20 | 100.114.91.105 |
+| TEST | Production pilot — KimKom-stack drills (100.114.91.105) | 192.168.178.20 | 100.114.91.105 |
 
 Both nodes are Proxmox VMs. SSH to both as `alex` using the deploy key at
 `/opt/kimkom-commandcenter/ssh/deploy_key`.
@@ -203,10 +203,15 @@ docker compose -f instances/<client>/docker-compose.yml --env-file instances/<cl
 ```bash
 cd /opt/KimKom-stack
 
-# Fresh production provisioning (11 phases)
-./init-client.sh --server <ip> --client <name> --client-slug <slug> --domain <domain> \
-  --odoo-image <image@sha256:digest> --backup-s3-key <key> --backup-s3-secret <secret> \
-  --backup-escrow-reference <ref> --tailscale-token <tskey>
+# Fresh production provisioning (11 phases, resumable).
+# Full verified flag list + pre-flight checklist: SOP.md Section 4.
+./init-client.sh --server <ts-ip> --client "<Name>" --client-slug <slug> \
+  --domain <domain> --odoo-image "kimkom/odoo-local@sha256:<digest>" \
+  --backup-s3-key <key> --backup-s3-secret <secret> \
+  --backup-escrow-reference <ref> --restic-pass <password> \
+  --github-deploy-key-file ~/.ssh/id_kimkom_github_<slug> \
+  --tailscale-token <tskey> --commandcenter-ip 100.67.52.95 \
+  --ssh-user alex --ssh-key /opt/kimkom-commandcenter/ssh/deploy_key --non-interactive
 
 # Deploy an update (exact SHA/digest)
 ./update.sh --server <ip> --client-slug <slug> \
