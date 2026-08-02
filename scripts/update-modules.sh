@@ -181,11 +181,19 @@ upgrade_rc=0
 set -Eeuo pipefail
 stack=$1; modules=$2
 cd "$stack"
-docker compose -f docker-compose.yaml --env-file .env stop odoo
-docker compose -f docker-compose.yaml --env-file .env run --rm -T odoo \
+# --local-http stacks run with docker-compose.local.yml (HTTP-only Traefik,
+# per-client module mounts). Recreated odoo must use the same override or it
+# picks up production labels (websecure/letsencrypt) that do not exist under
+# the local Traefik and the route vanishes.
+compose_args=(docker compose -f docker-compose.yaml --env-file .env)
+if grep -qE "^LOCAL_HTTP=['\"]?true['\"]?$" .env 2>/dev/null; then
+    [[ -f docker-compose.local.yml ]] && compose_args+=(-f docker-compose.local.yml)
+fi
+"${compose_args[@]}" stop odoo
+"${compose_args[@]}" run --rm -T odoo \
     odoo -u "$modules" --stop-after-init --no-http </dev/null
-docker compose -f docker-compose.yaml --env-file .env up -d --no-build --no-deps --force-recreate odoo
-container=$(docker compose -f docker-compose.yaml --env-file .env ps -q odoo | awk 'NF{print;exit}')
+"${compose_args[@]}" up -d --no-build --no-deps --force-recreate odoo
+container=$("${compose_args[@]}" ps -q odoo | awk 'NF{print;exit}')
 for i in $(seq 1 60); do
     status=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo unknown)
     if [[ "$status" == "healthy" ]]; then
