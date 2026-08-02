@@ -170,16 +170,16 @@ groups:
   - name: kimkom-backups
     rules:
       - alert: KimKomBackupFailed
-        expr: kimkom_backup_v2_backup_last_run_success == 0
+        expr: kimkom_backup_backup_last_run_success == 0
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Backup failed for {{ $labels.client }} ({{ $labels.environment }})"
-          description: "The most recent KimKom backup-v2 operation failed on {{ $labels.instance }}."
+          description: "The most recent KimKom backup operation failed on {{ $labels.instance }}."
 
       - alert: KimKomBackupStale
-        expr: time() - kimkom_backup_v2_backup_last_success_timestamp_seconds > 90 * 60
+        expr: time() - kimkom_backup_backup_last_success_timestamp_seconds > 90 * 60
         for: 15m
         labels:
           severity: critical
@@ -188,16 +188,16 @@ groups:
           description: "No successful backup has completed within 90 minutes on {{ $labels.instance }}."
 
       - alert: KimKomBackupMetricsMissing
-        expr: up{job="client-nodes"} == 1 unless on(instance) kimkom_backup_v2_backup_last_run_success
+        expr: up{job="client-nodes"} == 1 unless on(instance) kimkom_backup_backup_last_run_success
         for: 20m
         labels:
           severity: critical
         annotations:
           summary: "Backup metrics missing for {{ $labels.client }} ({{ $labels.environment }})"
-          description: "The managed node {{ $labels.instance }} is reachable but no backup-v2 status metric is present."
+          description: "The managed node {{ $labels.instance }} is reachable but no backup status metric is present."
 
       - alert: KimKomRestoreVerificationFailed
-        expr: kimkom_backup_v2_verify_last_run_success == 0
+        expr: kimkom_backup_verify_last_run_success == 0
         for: 5m
         labels:
           severity: warning
@@ -206,7 +206,7 @@ groups:
           description: "The most recent disposable restore verification failed on {{ $labels.instance }}."
 
       - alert: KimKomRestoreVerificationStale
-        expr: time() - kimkom_backup_v2_verify_last_success_timestamp_seconds > 35 * 24 * 60 * 60
+        expr: time() - kimkom_backup_verify_last_success_timestamp_seconds > 35 * 24 * 60 * 60
         for: 1h
         labels:
           severity: warning
