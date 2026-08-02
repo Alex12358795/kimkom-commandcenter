@@ -19,7 +19,7 @@ Both nodes are Proxmox VMs. SSH to both as `alex` using the deploy key at
 | Repo | Purpose |
 |---|---|
 | `kimkom-commandcenter` | This repo: dev instances, monitoring, GlitchTip, Portainer, backups, deployment scripts |
-| `KimKom-stack` | Production stack: `init-client.sh`, `update.sh`, `backup-v2`, Dockerfile, CI, `docker-compose.yaml` |
+| `KimKom-stack` | Production stack: `init-client.sh`, `update.sh`, `backup`, Dockerfile, CI, `docker-compose.yaml` |
 | `kimkom-modules` | Shared and per-client Odoo module workspaces |
 
 ## Service Endpoints
@@ -70,7 +70,7 @@ monitoring/
     alertmanager.yml              # generated runtime config (untracked, mode 0644)
     alertmanager.yml.template      # template with __TELEGRAM_BOT_TOKEN__ and __TELEGRAM_CHAT_ID__ placeholders
   grafana/provisioning/
-    dashboards/                    # 3 dashboards: node-exporter.json, postgresql.json, backup-v2.json
+    dashboards/                    # 3 dashboards: node-exporter.json, postgresql.json, backup.json
     datasources/                   # Prometheus (PBFA97CFB590B2093), Alertmanager, Loki
   grafana/data/                    # chown 472:472
   promtail/promtail.yml            # Docker log scraping, filters by project label
@@ -120,7 +120,7 @@ odoo/
     oca/sentry/                     # OCA sentry module for GlitchTip integration
 clients/
   kimkom-prod.yml                   # client manifest: slug, display_name, domain
-scripts/backup-v2/
+scripts/backup/
   common.sh                         # shared config loading, Compose helpers, image/health/attachment checks
   backup.sh                         # online pg_dump + Restic filestore backup (hourly, non-atomic)
   recovery-point.sh                 # quiesced paired DB+filestore recovery point (stop Odoo first)
@@ -133,23 +133,23 @@ scripts/backup-v2/
   tests/
     phase2-fixtures.sh              # mocked control-flow fixture (not operational proof)
 systemd/
-  kimkom-backup-v2.service          # hourly backup (ExecStart=/usr/local/libexec/kimkom-backup-v2/backup.sh)
-  kimkom-backup-v2.timer
-  kimkom-backup-v2-retention.service
-  kimkom-backup-v2-retention.timer
-  kimkom-backup-v2-check.service
-  kimkom-backup-v2-check.timer
-  kimkom-backup-v2-verify.service
-  kimkom-backup-v2-verify.timer
-  kimkom-backup-v2.env.example      # template for /etc/kimkom-backup-v2.env (root-only, mode 0600)
+  kimkom-backup.service          # hourly backup (ExecStart=/usr/local/libexec/kimkom-backup/backup.sh)
+  kimkom-backup.timer
+  kimkom-backup-retention.service
+  kimkom-backup-retention.timer
+  kimkom-backup-check.service
+  kimkom-backup-check.timer
+  kimkom-backup-verify.service
+  kimkom-backup-verify.timer
+  kimkom-backup.env.example      # template for /etc/kimkom-backup.env (root-only, mode 0600)
 lib/
   client-config.sh                  # shared validation for slugs, paths, domains
 .github/workflows/
   immutable-image.yml               # CI: workflow_dispatch manual trigger only (image rebuilds are rare)
 .env.example                        # template for $STACK_ROOT/.env (mode 0600)
 README.md
-BACKUP-V2.md                        # backup design and operational contract
-RECOVERY-V2.md                      # recovery prepare/apply contract and TEST-VM requirements
+BACKUP.md                        # backup design and operational contract
+RECOVERY.md                      # recovery prepare/apply contract and TEST-VM requirements
 ```
 
 ## Module Workflow
@@ -219,11 +219,11 @@ cd /opt/KimKom-stack
 ```bash
 # Run backup on production
 ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<ts-ip> \
-  'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
+  'sudo /usr/local/libexec/kimkom-backup/backup.sh'
 
 # Manual restore (quiesced recovery point)
-sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh prepare --id <ID>
-sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh apply --id <ID> --confirm-id <ID>
+sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh prepare --id <ID>
+sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh apply --id <ID> --confirm-id <ID>
 ```
 
 ### CommandCenter — alerting and monitoring
@@ -311,17 +311,17 @@ docker compose -f instances/SuperTCG/docker-compose.yml --env-file instances/Sup
 - Retention: 7 daily, 4 weekly, 6 monthly
 - Runs as root (needs filestore access)
 
-### Production Backup (backup-v2)
+### Production Backup (backup)
 
 - Online `pg_dump -Fc` (does NOT restart Odoo)
 - Restic encrypted backup to Hetzner S3
-- Config: `/etc/kimkom-backup-v2.env` (root:root, mode `0600`); application env is `$STACK_ROOT/.env`
-- Installed tools: `/usr/local/libexec/kimkom-backup-v2/`
+- Config: `/etc/kimkom-backup.env` (root:root, mode `0600`); application env is `$STACK_ROOT/.env`
+- Installed tools: `/usr/local/libexec/kimkom-backup/`
 - Four systemd timers:
-  - `kimkom-backup-v2.timer` — hourly backup
-  - `kimkom-backup-v2-retention.timer` — daily retention/prune
-  - `kimkom-backup-v2-check.timer` — weekly integrity check
-  - `kimkom-backup-v2-verify.timer` — monthly isolated restore verification
+  - `kimkom-backup.timer` — hourly backup
+  - `kimkom-backup-retention.timer` — daily retention/prune
+  - `kimkom-backup-check.timer` — weekly integrity check
+  - `kimkom-backup-verify.timer` — monthly isolated restore verification
 
 ### Recovery Points
 

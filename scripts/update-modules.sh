@@ -131,7 +131,7 @@ if [[ $skip_rp != true ]]; then
     recovery=$("${SSH[@]}" bash -s -- "$stack_dir" "$slug" "$modules" <<'REMOTE'
 set -Eeuo pipefail
 stack=$1; slug=$2; modules=$3
-recovery=/usr/local/libexec/kimkom-backup-v2
+recovery=/usr/local/libexec/kimkom-backup
 if [[ ! -x "$recovery/recovery-point.sh" ]]; then
     echo "SKIP: recovery-point.sh not installed on target" >&2
     exit 0
@@ -203,8 +203,8 @@ if ((upgrade_rc != 0)); then
     echo "FAILED: odoo upgrade exit=$upgrade_rc" >&2
     if [[ -n "$recovery_id" ]]; then
         echo "Restore from recovery point:" >&2
-        echo "  ssh $user@$ts_ip 'sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh prepare --id $recovery_id'" >&2
-        echo "  ssh $user@$ts_ip 'sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh apply --id $recovery_id --confirm-id $recovery_id'" >&2
+        echo "  ssh $user@$ts_ip 'sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh prepare --id $recovery_id'" >&2
+        echo "  ssh $user@$ts_ip 'sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh apply --id $recovery_id --confirm-id $recovery_id'" >&2
     fi
     exit 1
 fi

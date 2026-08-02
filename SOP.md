@@ -186,7 +186,7 @@ This:
 ### Routine backup (online, non-atomic)
 
 ```bash
-ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<ts-ip> 'sudo /usr/local/libexec/kimkom-backup-v2/backup.sh'
+ssh -i /opt/kimkom-commandcenter/ssh/deploy_key alex@<ts-ip> 'sudo /usr/local/libexec/kimkom-backup/backup.sh'
 ```
 
 Four timers run automatically:
@@ -200,13 +200,13 @@ Four timers run automatically:
 **Step 1 — Prepare** (non-destructive, validates the snapshot):
 
 ```bash
-sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh prepare --id <ID>
+sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh prepare --id <ID>
 ```
 
 **Step 2 — Apply** (destructive, requires exact confirmation):
 
 ```bash
-sudo /usr/local/libexec/kimkom-backup-v2/restore-recovery-point.sh apply --id <ID> --confirm-id <ID>
+sudo /usr/local/libexec/kimkom-backup/restore-recovery-point.sh apply --id <ID> --confirm-id <ID>
 ```
 
 This restores the paired DB+filestore plus the exact prior image and SHA. Odoo stays unavailable on failure.
@@ -322,7 +322,7 @@ Enterprise, OCA, and shared modules are runtime mounts on the production server 
 
 ### Backup failure
 
-- Check `/etc/kimkom-backup-v2.env` exists and is `root:root 0600`
+- Check `/etc/kimkom-backup.env` exists and is `root:root 0600`
 - Verify S3 credentials and Restic password files
 - Check Restic repo: `sudo restic -r <repo> snapshots`
 
@@ -352,9 +352,9 @@ Enterprise, OCA, and shared modules are runtime mounts on the production server 
 | GlitchTip API token | `secrets/commandcenter/glitchtip-api-token` | 0600 |
 | CommandCenter Restic password | `secrets/commandcenter/restic-password` | 0600 |
 | Alertmanager secrets | `secrets/commandcenter/alertmanager-secrets` | 0600 |
-| Prod S3 credentials | `/etc/kimkom-backup-v2/aws-credentials` | root:root 0600 |
-| Prod Restic password | `/etc/kimkom-backup-v2/restic-password` | root:root 0600 |
-| Prod backup config | `/etc/kimkom-backup-v2.env` | root:root 0600 |
+| Prod S3 credentials | `/etc/kimkom-backup/aws-credentials` | root:root 0600 |
+| Prod Restic password | `/etc/kimkom-backup/restic-password` | root:root 0600 |
+| Prod backup config | `/etc/kimkom-backup.env` | root:root 0600 |
 | Prod GlitchTip DSN | `$STACK_ROOT/.env` | 0600 |
 
 ---
