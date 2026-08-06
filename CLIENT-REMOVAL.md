@@ -3,7 +3,7 @@
 When a production client is decommissioned, its VM is repurposed for a different
 client, or its Tailscale IP changes, you must manually prune its reporting
 entries from the CommandCenter. None of the onboarding tooling (`init-client.sh`,
-`install-monitoring.sh`) has a symmetric offboarding path — every step below is
+`03-install-monitoring.sh`) has a symmetric offboarding path — every step below is
 performed by hand on this host.
 
 Use this runbook when a client leaves, regardless of whether the underlying VM
@@ -17,7 +17,7 @@ is decommissioned or repurposed.
 |---|---|
 | Client contract ends, stack torn down | Full removal: steps 1–8 |
 | Client moved to a new VM, old VM repurposed | Removal on the old Tailscale IP (steps 1–6), then re-onboard via `init-client.sh` on the new VM |
-| TEST VM repurposed for a different client pilot | Removal on the old client slug (steps 1–4), then `install-monitoring.sh --client-slug <new-slug>` on the same VM |
+| TEST VM repurposed for a different client pilot | Removal on the old client slug (steps 1–4), then `03-install-monitoring.sh --client-slug <new-slug>` on the same VM |
 
 This is what happened on 30/07/2026: the TEST VM at `100.114.91.105` was
 repurposed from `kimkom-prod` to `vranckeneers-prod` while the Prometheus scrape
@@ -66,7 +66,7 @@ knows where new entries are appended:
 
 ```yaml
 # Placeholder for client scrape targets. Entries are appended by
-# install-monitoring.sh (pilot) or init-client.sh phase 10 (production).
+# 03-install-monitoring.sh (pilot) or init-client.sh phase 10 (production).
 # Use CLIENT-REMOVAL.md to remove entries when a client is decommissioned or
 # its VM is repurposed.
 ```
@@ -246,7 +246,7 @@ Update `/opt/kimkom-commandcenter/AGENTS.md` and
 - §Module Workflow — references to `<slug>` client modules
 - §Credentials Reference — secrets to archive or rotate
 
-If the client's modules in `/opt/kimkom-modules/<slug>/` should be archived
+If the client's modules in `/opt/odoo-modules/<slug>/` should be archived
 before removal, push the final commit and create a `git tag archive/<slug>-<date>`
 on the `kimkom-modules` repo.
 
@@ -255,14 +255,14 @@ on the `kimkom-modules` repo.
 ## Notes
 
 - **Reversibility.** All edits here are reversible. Re-running
-  `install-monitoring.sh --client-slug <slug> --target-ts-ip <ts-ip>` re-adds
+  `03-install-monitoring.sh --client-slug <slug> --target-ts-ip <ts-ip>` re-adds
   the pilot scrape targets. Re-running `init-client.sh ... 10-monitoring-onboard`
   re-adds production targets and the blackbox entries.
 - **Mute route.** Alertmanager silences `environment != "production"` — so
   pilot labels will not page. But `EndpointProbeFailed` (rule has no env
   filter) will, which is how a stale probe on a repurposed VM stays visible.
 - **No automated tool exists yet.** A symmetric `uninstall-monitoring.sh`
-  companion to `install-monitoring.sh` would cover steps 1–4 and the reload.
+  companion to `03-install-monitoring.sh` would cover steps 1–4 and the reload.
   If you remove a second client, build it.
 - **Why the orphan `https.yml.new` exists.** Someone started editing
   `https.yml` and dropped it. These files are noise — delete them when you

@@ -18,7 +18,10 @@ Example target group:
 The current Odoo `/metrics` endpoints are not usable, so Odoo is monitored by
 HTTP probes instead of a hardcoded scrape target.
 
-No backup timestamp metric is currently exported. Do not enable a metric
-absence alert until a stable `kimkom_backup_last_success_timestamp_seconds`
-series and expected instance labels exist; otherwise the alert would fire
-permanently and could not identify a missing backup source safely.
+The CommandCenter now exports `kimkom_backup_*` metrics (last run timestamp,
+last success timestamp, duration, etc.) from the managed nodes' backup scripts.
+These are consumed by the `kimkom-backups` Prometheus alert rules
+(`KimKomBackupFailed`, `KimKomBackupStale`, `KimKomBackupMetricsMissing`,
+`KimKomRestoreVerificationFailed`, `KimKomRestoreVerificationStale`) and by the
+"Backup – Status" Grafana dashboard (uid `kimkom-backup`). Do not enable a
+metric-absence alert beyond the existing `KimKomBackupMetricsMissing` rule.

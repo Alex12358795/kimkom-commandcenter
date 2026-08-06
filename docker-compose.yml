@@ -49,7 +49,7 @@ services:
       retries: 5
 
   portainer:
-    image: portainer/portainer-ce@sha256:d27f76194b719bfe2a34779d51798a7adf02510cfba69ebcb538267f75aa4f47
+    image: portainer/portainer-ce@sha256:f6bc23d1695530a609563fd65c180aaafec0fc02e019d5fc63d16b6fbe83addd
     container_name: odoo-portainer
     restart: unless-stopped
     ports:

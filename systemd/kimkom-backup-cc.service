@@ -7,7 +7,7 @@ Requires=docker.service
 Type=oneshot
 User=root
 WorkingDirectory=/opt/kimkom-commandcenter
-ExecStart=/opt/kimkom-commandcenter/scripts/backup-commandcenter.sh
+ExecStart=/opt/kimkom-commandcenter/scripts/05-backup-commandcenter.sh
 RestrictRealtime=true
 MemoryMax=1G
 

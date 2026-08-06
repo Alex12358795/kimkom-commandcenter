@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_event_waitlist_public,Event Waitlist Public Access,model_event_waitlist,base.group_public,1,0,1,0
-access_event_waitlist_portal,Event Waitlist Portal Access,model_event_waitlist,base.group_portal,1,0,1,0
-access_event_waitlist_user,Event Waitlist User Access,model_event_waitlist,event.group_event_user,1,1,1,1
-access_event_waitlist_manager,Event Waitlist Manager Access,model_event_waitlist,event.group_event_manager,1,1,1,1

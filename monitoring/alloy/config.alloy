@@ -1,0 +1,58 @@
+// Docker container log pipeline for KimKom CommandCenter monitoring.
+// Replaces the deprecated promtail service (see monitoring/promtail/promtail.yml).
+// Alloy v1.18.0 (grafana/alloy:v1.18.0)
+
+// Discover containers via the Docker Engine API.
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Keep only containers belonging to the monitored compose projects and
+// normalize labels the same way the old promtail relabel rules did:
+//   container_name (strip leading '/'), service, project, stream.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container_name"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "project"
+  }
+
+  // Keep only containers from the monitored compose projects.
+  rule {
+    source_labels = ["project"]
+    regex         = "kimkom-commandcenter|odoo-dev|kimkom-sop"
+    action        = "keep"
+  }
+}
+
+// Tail container logs from the discovered targets.
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  forward_to = [loki.write.default.receiver]
+}
+
+// Ship to the local Loki instance.
+loki.write "default" {
+  endpoint {
+    url = "http://odoo-loki:3100/loki/api/v1/push"
+  }
+}
