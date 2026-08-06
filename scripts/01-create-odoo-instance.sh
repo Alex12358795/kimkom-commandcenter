@@ -3,20 +3,22 @@ set -euo pipefail
 
 show_help() {
     cat <<EOF
-Usage: $0 [--client <name>] [--admin-pass <pass>] [--dry-run]
+Usage: $0 [--client <name>] [--admin-pass <pass>] [--odoo-version <18|19>] [--dry-run]
 
-Creates a new isolated Odoo 18 development instance and MCP config.
+Creates a new isolated Odoo development instance and MCP config.
 Prompts for client name interactively if not provided.
 
 Options:
-  --client      New client name (e.g., "acme") — becomes the subdomain
-  --admin-pass  Odoo admin password (default: auto-generated)
-  --dry-run     Render and validate files without creating a customer, database, MCP entry, or Docker resources
-  --help        Show this message
+  --client        New client name (e.g., "acme") — becomes the subdomain
+  --admin-pass    Odoo admin password (default: auto-generated)
+  --odoo-version  Odoo major version for the instance image (18 or 19; default: 18)
+  --dry-run       Render and validate files without creating a customer, database, MCP entry, or Docker resources
+  --help          Show this message
 
 Examples:
   $0
   $0 --client acme
+  $0 --client acme --odoo-version 19
 EOF
     exit 0
 }
@@ -32,6 +34,7 @@ done
 
 CLIENT=""
 ADMIN_PASS=""
+ODOO_VERSION="18"
 DRY_RUN=0
 
 while [ $# -gt 0 ]; do
@@ -42,6 +45,9 @@ while [ $# -gt 0 ]; do
         --admin-pass)
             [ "$#" -ge 2 ] || { echo "ERROR: --admin-pass requires a value" >&2; exit 1; }
             ADMIN_PASS="$2"; shift 2 ;;
+        --odoo-version)
+            [ "$#" -ge 2 ] || { echo "ERROR: --odoo-version requires a value" >&2; exit 1; }
+            ODOO_VERSION="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
         --help) show_help ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -60,6 +66,12 @@ if [ "$CLIENT" = "supertcg" ]; then
 fi
 if [[ ! "$CLIENT" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
     echo "ERROR: Client must be a lowercase slug containing letters, digits, and hyphens" >&2
+    exit 1
+fi
+
+# Validate the Odoo version before any host or instance mutation.
+if [ "$ODOO_VERSION" != "18" ] && [ "$ODOO_VERSION" != "19" ]; then
+    echo "ERROR: invalid --odoo-version '$ODOO_VERSION' — must be 18 or 19" >&2
     exit 1
 fi
 
@@ -103,6 +115,7 @@ case "$MODULES_ORIGIN" in
 esac
 
 echo "Creating Odoo instance: $CLIENT"
+echo "  Odoo: $ODOO_VERSION"
 echo "  DB:   $DB_NAME"
 echo "  Role: $DB_ROLE"
 
@@ -122,7 +135,7 @@ mkdir -p "$INSTANCE_DIR/config" "$INSTANCE_DIR/data" "$INSTANCE_DIR/addons-enter
 
 # --- Dockerfile ---
 cat > "$INSTANCE_DIR/Dockerfile" <<DOCKERFILE
-FROM odoo:18
+FROM odoo:${ODOO_VERSION}
 
 USER root
 
